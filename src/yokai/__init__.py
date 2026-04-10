@@ -52,7 +52,15 @@ from yokai.core.routers import (
 from yokai.storage.memory_store import InMemoryExecutionStore
 from yokai.storage.sqlite_store import SqliteExecutionStore
 
-__version__ = "0.1.0"
+def _read_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("yokai")
+    except Exception:
+        return "0.0.0+unknown"
+
+
+__version__ = _read_version()
 
 __all__ = [
     "AgentExecutionError",
