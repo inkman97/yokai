@@ -1,0 +1,24 @@
+# Minimal viable configuration. Reads tokens from environment variables.
+# Use this as a starting point and add fields as you need them.
+
+issue_tracker:
+  type: jira_dc
+  base_url: https://jira.example.com
+  project: PROJ
+  username: ${JIRA_USERNAME}
+  token: ${JIRA_TOKEN}
+
+repo_hosting:
+  type: bitbucket_dc
+  base_url: https://code.example.com
+  project_key: myproj
+  username: ${BITBUCKET_USERNAME}
+  token: ${BITBUCKET_TOKEN}
+
+agent:
+  type: claude_code
+
+routing:
+  type: component_map
+  components:
+    backend: my-backend

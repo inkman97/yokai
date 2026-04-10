@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yokai"
+version = "0.1.0"
+description = "From issue tracker stories to pull requests via coding agents. A spirit that works while you sleep."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "yokai contributors"},
+]
+keywords = [
+    "ai",
+    "coding-agent",
+    "claude-code",
+    "jira",
+    "bitbucket",
+    "automation",
+    "spec-driven-development",
+    "atlassian-data-center",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "responses>=0.24",
+]
+
+[project.scripts]
+yokai = "yokai.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-org/yokai"
+Documentation = "https://github.com/your-org/yokai/tree/main/docs"
+Repository = "https://github.com/your-org/yokai"
+Issues = "https://github.com/your-org/yokai/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+yokai = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

@@ -1,0 +1,61 @@
+# Example configuration for an enterprise on-premise setup with
+# Jira Data Center, Bitbucket Data Center, and Claude Code as the
+# coding agent. Inspired by a real Swiss Federal Railways (SBB) setup.
+#
+# Environment variables that must be set before running:
+#   JIRA_USERNAME, JIRA_TOKEN
+#   BITBUCKET_USERNAME, BITBUCKET_TOKEN
+#
+# The Jira and Bitbucket tokens are personal access tokens (PAT) issued
+# by the respective Data Center installations. The Bitbucket token must
+# have repository write permission, otherwise pushes will fail with
+# "insufficient permissions".
+
+issue_tracker:
+  type: jira_dc
+  base_url: https://flow.example-corp.ch
+  project: NOVA
+  trigger_label: ai-pipeline
+  processing_label: ai-processing
+  status: Backlog
+  username: ${JIRA_USERNAME}
+  token: ${JIRA_TOKEN}
+
+repo_hosting:
+  type: bitbucket_dc
+  base_url: https://code.example-corp.ch
+  project_key: mvp_oevp
+  username: ${BITBUCKET_USERNAME}
+  token: ${BITBUCKET_TOKEN}
+  default_branch: master
+  # Branch pattern must match the project's branch permission rules.
+  # If your repo only allows feature/* prefixes, keep this prefix.
+  branch_pattern: "feature/{issue_key}-ai-{timestamp}"
+
+agent:
+  type: claude_code
+  command: claude
+  flags:
+    - --print
+    - --dangerously-skip-permissions
+  timeout_seconds: 1800
+
+routing:
+  type: component_map
+  components:
+    EMU-BE: nova-masterdata-editor-commons
+    EMU-FE: nova-masterdata-editor-ui-commons
+  # Stories without a matching component fall back to a label like
+  # "repo:my-repo-name", which is handled by the chained label router.
+  label_prefix: "repo:"
+
+orchestrator:
+  poll_interval_seconds: 30
+  max_parallel_stories: 4
+  workspace_dir: ~/yokai-workspace
+
+storage:
+  type: sqlite
+  path: ~/.yokai/state.db
+
+plugins: []
