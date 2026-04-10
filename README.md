@@ -65,7 +65,7 @@ tested. The API is unstable and may change.
 ### 1. Install
 
 ```bash
-pip install yokai
+pip install yokai-cli
 ```
 
 You also need:
