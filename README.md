@@ -200,7 +200,7 @@ time. Missing variables raise a clear configuration error.
 Clone the repo and install in editable mode with dev extras:
 
 ```bash
-git clone https://github.com/your-org/yokai
+git clone https://github.com/inkman97/yokai
 cd yokai
 pip install -e .[dev]
 ```
