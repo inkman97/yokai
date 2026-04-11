@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yokai-cli"
-version = "0.1.0a4"
+version = "0.1.0a5"
 description = "From issue tracker stories to pull requests via coding agents. A spirit that works while you sleep."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -48,10 +48,10 @@ dev = [
 yokai = "yokai.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/your-org/yokai"
-Documentation = "https://github.com/your-org/yokai/tree/main/docs"
-Repository = "https://github.com/your-org/yokai"
-Issues = "https://github.com/your-org/yokai/issues"
+Homepage = "https://github.com/inkman97/yokai"
+Documentation = "https://github.com/inkman97/yokai/tree/main/docs"
+Repository = "https://github.com/inkman97/yokai"
+Issues = "https://github.com/inkman97/yokai/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
