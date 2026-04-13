@@ -27,10 +27,12 @@ story so the human reviewer has full context.
 
 Several commercial offerings cover the same workflow, but they all
 target cloud SaaS deployments (Jira Cloud, Bitbucket Cloud, GitHub).
-**yokai is the first open-source framework targeted at
-on-premise enterprise environments**: Jira Data Center and Bitbucket
+**yokai started as the first open-source framework targeted at
+on-premise enterprise environments** (Jira Data Center and Bitbucket
 Data Center behind firewalls and SSO, where cloud connectors do not
-work.
+reach), and now also ships adapters for Atlassian Cloud
+(Jira Cloud and Bitbucket Cloud) so the same framework can drive
+hybrid setups.
 
 It is designed to be runnable from a developer laptop, with no
 infrastructure requirements beyond Python 3.10+, git, and the chosen
@@ -38,16 +40,17 @@ coding agent CLI.
 
 ## Status
 
-Early alpha. The core orchestrator, the Jira Data Center and Bitbucket
-Data Center adapters, and the Claude Code adapter are working and
-tested. The API is unstable and may change.
+Early alpha. The core orchestrator, the Jira Data Center, Bitbucket
+Data Center, Jira Cloud, and Bitbucket Cloud adapters, and the
+Claude Code adapter are working and tested. The API is unstable and
+may change.
 
 ## Features
 
 - Provider-agnostic core: swap any of the issue tracker, repo hosting,
   coding agent, router, or storage by implementing a small interface.
-- Built-in adapters for Jira Data Center, Bitbucket Data Center, and
-  Claude Code CLI.
+- Built-in adapters for Jira Data Center, Bitbucket Data Center,
+  Jira Cloud, Bitbucket Cloud, and Claude Code CLI.
 - Parallel processing with per-repository locking: stories on different
   repos run concurrently, stories on the same repo serialize.
 - In-flight deduplication: a story is never picked up twice while it
@@ -57,7 +60,8 @@ tested. The API is unstable and may change.
   like `after_agent_run` or `on_failure` without forking the framework.
 - Persistent execution state via SQLite, surviving process restarts.
 - Notification sinks (logger, Slack webhook, custom).
-- Token redaction in all log output.
+- Token redaction in all log output, including credentials embedded in
+  Bitbucket Cloud clone URLs.
 - Idempotent commands and safe failure recovery.
 
 ## Quickstart

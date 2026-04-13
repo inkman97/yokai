@@ -12,12 +12,16 @@ import importlib
 from pathlib import Path
 from typing import Callable
 
+from yokai.adapters.bitbucket_cloud import BitbucketCloudHosting
+from yokai.adapters.bitbucket_cloud.hosting import BitbucketCloudSettings
 from yokai.adapters.bitbucket_dc import BitbucketDataCenterHosting
 from yokai.adapters.bitbucket_dc.hosting import (
     BitbucketDataCenterSettings,
 )
 from yokai.adapters.claude_code import ClaudeCodeAgent
 from yokai.adapters.claude_code.agent import ClaudeCodeSettings
+from yokai.adapters.jira_cloud import JiraCloudTracker
+from yokai.adapters.jira_cloud.tracker import JiraCloudSettings
 from yokai.adapters.jira_dc import JiraDataCenterTracker
 from yokai.adapters.jira_dc.tracker import JiraDataCenterSettings
 from yokai.core.config import FrameworkConfig
@@ -105,6 +109,34 @@ def _build_bitbucket_dc(config: FrameworkConfig) -> RepoHosting:
     )
 
 
+def _build_jira_cloud(config: FrameworkConfig) -> IssueTracker:
+    s = config.issue_tracker
+    return JiraCloudTracker(
+        JiraCloudSettings(
+            base_url=s.base_url,
+            project=s.project,
+            email=s.username,
+            api_token=s.token,
+            trigger_label=s.trigger_label,
+            processing_label=s.processing_label,
+            status=s.status,
+        )
+    )
+
+
+def _build_bitbucket_cloud(config: FrameworkConfig) -> RepoHosting:
+    s = config.repo_hosting
+    return BitbucketCloudHosting(
+        BitbucketCloudSettings(
+            base_url=s.base_url,
+            workspace=s.project_key,
+            username=s.username,
+            app_password=s.token,
+            default_branch=s.default_branch,
+        )
+    )
+
+
 def _build_claude_code(config: FrameworkConfig) -> CodingAgent:
     s = config.agent
     return ClaudeCodeAgent(
@@ -136,7 +168,9 @@ def _build_sqlite_store(config: FrameworkConfig) -> ExecutionStore:
 
 
 _TRACKER_BUILDERS["jira_dc"] = _build_jira_dc
+_TRACKER_BUILDERS["jira_cloud"] = _build_jira_cloud
 _HOSTING_BUILDERS["bitbucket_dc"] = _build_bitbucket_dc
+_HOSTING_BUILDERS["bitbucket_cloud"] = _build_bitbucket_cloud
 _AGENT_BUILDERS["claude_code"] = _build_claude_code
 _ROUTER_BUILDERS["component_map"] = _build_component_map_router
 _STORE_BUILDERS["memory"] = _build_memory_store

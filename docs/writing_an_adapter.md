@@ -197,6 +197,37 @@ provide a no-op `RepoHosting` adapter and let the agent handle the
 git work. The pipeline does not enforce a strict ordering inside the
 agent step.
 
+## Cloud vs Data Center adapters
+
+`yokai` ships with adapters for both Atlassian Data Center (`jira_dc`,
+`bitbucket_dc`) and Atlassian Cloud (`jira_cloud`, `bitbucket_cloud`).
+The cloud adapters reuse the same `IssueTrackerConfig` and
+`RepoHostingConfig` field names as the data center ones, but with
+slightly different semantics that are documented in each adapter's
+module docstring:
+
+For `jira_cloud`:
+- `username` carries the Atlassian account email
+- `token` carries an API token from id.atlassian.com
+
+For `bitbucket_cloud`:
+- `project_key` carries the Bitbucket Cloud workspace slug (Cloud has
+  no "project" concept)
+- `username` carries the Atlassian/Bitbucket account username
+- `token` carries a Bitbucket Cloud app password
+
+This is a deliberate non-invasive design choice: it lets you switch
+from a Data Center setup to a Cloud setup by changing the `type` field
+and the credentials, without modifying the framework's config schema.
+If you write a new cloud adapter (Linear, GitHub, GitLab, etc.), follow
+the same convention: reuse the existing config fields with adapter-
+specific semantics and document the mapping in the adapter's docstring.
+
+If your adapter genuinely needs a field that does not fit any existing
+slot, you can always pull it from an environment variable directly
+inside your settings dataclass instead of expanding the framework
+config schema.
+
 ## Contributing your adapter back
 
 If your adapter is general enough to be useful to others, consider
