@@ -116,7 +116,7 @@ def _reject_legacy_field(
 ) -> None:
     """Raise a clear error if a config still uses a renamed field name.
 
-    Renames performed in 0.1.0a8:
+    Renames performed in 0.1.0a10:
     - issue_tracker.username -> issue_tracker.account
     - repo_hosting.username  -> repo_hosting.account
     - repo_hosting.project_key -> repo_hosting.namespace
@@ -124,7 +124,7 @@ def _reject_legacy_field(
     if legacy in data:
         raise ConfigurationError(
             f"{parent}.{legacy} was renamed to {parent}.{current} "
-            f"in yokai 0.1.0a8. Please update your configuration."
+            f"in yokai 0.1.0a10. Please update your configuration."
         )
 
 
