@@ -17,14 +17,14 @@ issue_tracker:
   trigger_label: ai-pipeline
   processing_label: ai-processing
   status: Backlog
-  username: testuser
+  account: testuser
   token: ${TEST_JIRA_TOKEN}
 
 repo_hosting:
   type: bitbucket_dc
   base_url: https://code.example.com
-  project_key: myproj
-  username: testuser
+  namespace: myproj
+  account: testuser
   token: ${TEST_BB_TOKEN}
   default_branch: master
   branch_pattern: "feature/{issue_key}-ai-{timestamp}"
@@ -106,7 +106,7 @@ class TestLoadConfig:
     def test_loads_repo_hosting_section(self, valid_config_file):
         config = load_config(valid_config_file)
         assert config.repo_hosting.type == "bitbucket_dc"
-        assert config.repo_hosting.project_key == "myproj"
+        assert config.repo_hosting.namespace == "myproj"
         assert config.repo_hosting.token == "bb-token-value"
         assert config.repo_hosting.default_branch == "master"
 
@@ -173,13 +173,13 @@ class TestLoadConfig:
             "  type: jira_dc\n"
             "  base_url: https://flow.example.com\n"
             "  project: NOVA\n"
-            "  username: u\n"
+            "  account: u\n"
             "  token: ${TEST_JIRA_TOKEN}\n"
             "repo_hosting:\n"
             "  type: bitbucket_dc\n"
             "  base_url: https://code.example.com\n"
-            "  project_key: p\n"
-            "  username: u\n"
+            "  namespace: p\n"
+            "  account: u\n"
             "  token: ${TEST_BB_TOKEN}\n"
             "agent:\n"
             "  type: claude_code\n"
@@ -192,3 +192,57 @@ class TestLoadConfig:
         assert config.storage.type == "memory"
         assert config.issue_tracker.trigger_label == "ai-pipeline"
         assert config.issue_tracker.status == "Backlog"
+
+    def test_legacy_username_in_issue_tracker_raises(
+        self, tmp_path, env_with_tokens
+    ):
+        cfg = tmp_path / "legacy.yaml"
+        cfg.write_text(
+            "issue_tracker:\n"
+            "  type: jira_dc\n"
+            "  base_url: https://flow.example.com\n"
+            "  project: NOVA\n"
+            "  username: u\n"
+            "  token: ${TEST_JIRA_TOKEN}\n"
+            "repo_hosting:\n"
+            "  type: bitbucket_dc\n"
+            "  base_url: https://code.example.com\n"
+            "  namespace: p\n"
+            "  account: u\n"
+            "  token: ${TEST_BB_TOKEN}\n"
+            "agent:\n"
+            "  type: claude_code\n"
+            "routing:\n"
+            "  type: component_map\n"
+        )
+        with pytest.raises(
+            ConfigurationError, match="renamed to issue_tracker.account"
+        ):
+            load_config(cfg)
+
+    def test_legacy_project_key_in_repo_hosting_raises(
+        self, tmp_path, env_with_tokens
+    ):
+        cfg = tmp_path / "legacy.yaml"
+        cfg.write_text(
+            "issue_tracker:\n"
+            "  type: jira_dc\n"
+            "  base_url: https://flow.example.com\n"
+            "  project: NOVA\n"
+            "  account: u\n"
+            "  token: ${TEST_JIRA_TOKEN}\n"
+            "repo_hosting:\n"
+            "  type: bitbucket_dc\n"
+            "  base_url: https://code.example.com\n"
+            "  project_key: p\n"
+            "  account: u\n"
+            "  token: ${TEST_BB_TOKEN}\n"
+            "agent:\n"
+            "  type: claude_code\n"
+            "routing:\n"
+            "  type: component_map\n"
+        )
+        with pytest.raises(
+            ConfigurationError, match="renamed to repo_hosting.namespace"
+        ):
+            load_config(cfg)

@@ -24,7 +24,7 @@ log = get_logger("adapters.jira_dc")
 class JiraDataCenterSettings:
     base_url: str
     project: str
-    username: str
+    account: str
     token: str
     trigger_label: str = "ai-pipeline"
     processing_label: str = "ai-processing"

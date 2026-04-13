@@ -36,14 +36,14 @@ def make_config(tmp_path: Path, **overrides) -> FrameworkConfig:
             trigger_label="ai-pipeline",
             processing_label="ai-processing",
             status="Backlog",
-            username="user",
+            account="user",
             token="jira-secret",
         ),
         repo_hosting=RepoHostingConfig(
             type="bitbucket_dc",
             base_url="https://code.example.com",
-            project_key="myproj",
-            username="user",
+            namespace="myproj",
+            account="user",
             token="bb-secret",
         ),
         agent=AgentConfig(type="claude_code"),
@@ -121,7 +121,7 @@ class TestPluginRegistration:
             sentinel["called"] = True
             return JiraDataCenterTracker(
                 JiraDataCenterSettings(
-                    base_url="x", project="x", username="x", token="x"
+                    base_url="x", project="x", account="x", token="x"
                 )
             )
 

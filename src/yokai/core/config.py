@@ -30,7 +30,7 @@ class IssueTrackerConfig:
     trigger_label: str
     processing_label: str
     status: str
-    username: str
+    account: str
     token: str
 
 
@@ -38,8 +38,8 @@ class IssueTrackerConfig:
 class RepoHostingConfig:
     type: str
     base_url: str
-    project_key: str
-    username: str
+    namespace: str
+    account: str
     token: str
     default_branch: str = "master"
     branch_pattern: str = "feature/{issue_key}-ai-{timestamp}"
@@ -111,7 +111,25 @@ def _require(data: dict, key: str, parent: str = "") -> Any:
     return data[key]
 
 
+def _reject_legacy_field(
+    data: dict, legacy: str, current: str, parent: str
+) -> None:
+    """Raise a clear error if a config still uses a renamed field name.
+
+    Renames performed in 0.1.0a8:
+    - issue_tracker.username -> issue_tracker.account
+    - repo_hosting.username  -> repo_hosting.account
+    - repo_hosting.project_key -> repo_hosting.namespace
+    """
+    if legacy in data:
+        raise ConfigurationError(
+            f"{parent}.{legacy} was renamed to {parent}.{current} "
+            f"in yokai 0.1.0a8. Please update your configuration."
+        )
+
+
 def _parse_issue_tracker(data: dict) -> IssueTrackerConfig:
+    _reject_legacy_field(data, "username", "account", "issue_tracker")
     return IssueTrackerConfig(
         type=_require(data, "type", "issue_tracker"),
         base_url=_require(data, "base_url", "issue_tracker"),
@@ -119,17 +137,19 @@ def _parse_issue_tracker(data: dict) -> IssueTrackerConfig:
         trigger_label=data.get("trigger_label", "ai-pipeline"),
         processing_label=data.get("processing_label", "ai-processing"),
         status=data.get("status", "Backlog"),
-        username=_require(data, "username", "issue_tracker"),
+        account=_require(data, "account", "issue_tracker"),
         token=_require(data, "token", "issue_tracker"),
     )
 
 
 def _parse_repo_hosting(data: dict) -> RepoHostingConfig:
+    _reject_legacy_field(data, "username", "account", "repo_hosting")
+    _reject_legacy_field(data, "project_key", "namespace", "repo_hosting")
     return RepoHostingConfig(
         type=_require(data, "type", "repo_hosting"),
         base_url=_require(data, "base_url", "repo_hosting"),
-        project_key=_require(data, "project_key", "repo_hosting"),
-        username=_require(data, "username", "repo_hosting"),
+        namespace=_require(data, "namespace", "repo_hosting"),
+        account=_require(data, "account", "repo_hosting"),
         token=_require(data, "token", "repo_hosting"),
         default_branch=data.get("default_branch", "master"),
         branch_pattern=data.get(

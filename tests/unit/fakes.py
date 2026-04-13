@@ -79,7 +79,7 @@ class FakeHosting(RepoHosting):
     def resolve_repo(self, slug: str) -> RepoLocation:
         return RepoLocation(
             slug=slug,
-            project_key="fake",
+            namespace="fake",
             default_branch=self.default_branch,
             clone_url=f"https://fake/{slug}.git",
             web_url=f"https://fake/{slug}",

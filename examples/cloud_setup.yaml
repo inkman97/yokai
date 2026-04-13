@@ -1,23 +1,23 @@
 # Cloud configuration example.
 #
 # Uses Jira Cloud and Bitbucket Cloud instead of the on-premise Data
-# Center variants. The shape of the YAML is identical to the Data Center
-# example: the same field names are reused with cloud-specific semantics.
+# Center variants. Only the `type` fields and the credentials change
+# compared to a Data Center configuration; the structure of the YAML
+# is the same.
 #
-# Field mapping for the cloud adapters:
+# Field meaning for the cloud adapters:
 #
 # issue_tracker (jira_cloud):
 #   base_url  ->  https://your-site.atlassian.net
-#   project   ->  Jira project key (same concept as Data Center)
-#   username  ->  Atlassian account email
+#   project   ->  Jira project key
+#   account   ->  Atlassian account email
 #   token     ->  API token from id.atlassian.com/manage-profile/security
 #
 # repo_hosting (bitbucket_cloud):
-#   base_url     ->  https://api.bitbucket.org/2.0 (always this value)
-#   project_key  ->  Bitbucket Cloud workspace slug (Cloud has no
-#                    "project" concept; this field carries the workspace)
-#   username     ->  Atlassian/Bitbucket account username
-#   token        ->  app password from Bitbucket Cloud account settings
+#   base_url   ->  https://api.bitbucket.org/2.0 (always this value)
+#   namespace  ->  Bitbucket Cloud workspace slug
+#   account    ->  Bitbucket account username
+#   token      ->  app password from Bitbucket Cloud account settings
 #
 # Tokens should always come from environment variables, never inline.
 
@@ -25,14 +25,14 @@ issue_tracker:
   type: jira_cloud
   base_url: https://acme.atlassian.net
   project: NOVA
-  username: ${JIRA_CLOUD_EMAIL}
+  account: ${JIRA_CLOUD_EMAIL}
   token: ${JIRA_CLOUD_API_TOKEN}
 
 repo_hosting:
   type: bitbucket_cloud
   base_url: https://api.bitbucket.org/2.0
-  project_key: acme-team
-  username: ${BITBUCKET_CLOUD_USERNAME}
+  namespace: acme-team
+  account: ${BITBUCKET_CLOUD_USERNAME}
   token: ${BITBUCKET_CLOUD_APP_PASSWORD}
   default_branch: main
 

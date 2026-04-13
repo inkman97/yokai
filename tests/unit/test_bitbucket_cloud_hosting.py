@@ -26,8 +26,8 @@ def make_hosting():
         BitbucketCloudSettings(
             base_url="https://api.bitbucket.org/2.0",
             workspace="acme-team",
-            username="alice",
-            app_password="cloud-app-password",
+            account="alice",
+            token="cloud-app-password",
         )
     )
 
@@ -53,10 +53,10 @@ class TestResolveRepo:
         loc = hosting.resolve_repo("my-repo")
         assert loc.default_branch == "main"
 
-    def test_project_key_field_holds_workspace(self):
+    def test_namespace_field_holds_workspace(self):
         hosting = make_hosting()
         loc = hosting.resolve_repo("my-repo")
-        assert loc.project_key == "acme-team"
+        assert loc.namespace == "acme-team"
 
     def test_slug_preserved(self):
         hosting = make_hosting()
@@ -106,7 +106,7 @@ class TestOpenPullRequest:
         assert b"toRef" not in body
 
     @responses.activate
-    def test_uses_basic_auth_with_username_and_app_password(self):
+    def test_uses_basic_auth_with_account_and_token(self):
         responses.add(
             responses.POST,
             "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests",

@@ -1,22 +1,22 @@
 """Bitbucket Cloud adapter implementing RepoHosting.
 
 Targets the Bitbucket Cloud REST API v2 (api.bitbucket.org/2.0) and
-uses HTTP Basic authentication with an Atlassian account username and
+uses HTTP Basic authentication with a Bitbucket account username and
 an app password generated from the Bitbucket Cloud account settings.
 
 Mapping to FrameworkConfig fields:
-- RepoHostingConfig.base_url     -> https://api.bitbucket.org/2.0
-- RepoHostingConfig.project_key  -> reused as the Bitbucket Cloud
-                                     workspace slug (Cloud has no
-                                     "project" concept like Data Center)
-- RepoHostingConfig.username     -> Atlassian account username (the one
-                                     visible at id.atlassian.com, not
-                                     the email)
-- RepoHostingConfig.token        -> Bitbucket Cloud app password
+- RepoHostingConfig.base_url   -> https://api.bitbucket.org/2.0
+- RepoHostingConfig.namespace  -> Bitbucket Cloud workspace slug
+                                   (Cloud has no "project" concept)
+- RepoHostingConfig.account    -> Bitbucket account username (the one
+                                   visible at id.atlassian.com, not
+                                   the email)
+- RepoHostingConfig.token      -> Bitbucket Cloud app password
 
 Local git operations use the same subprocess pattern as the DC adapter
-but the clone URL uses the x-token-auth pattern required by Bitbucket
-Cloud when authenticating with an app password over HTTPS.
+but the clone URL embeds the username and app password as basic auth
+userinfo, which is the pattern Bitbucket Cloud documents for HTTPS
+clone with an app password.
 
 Pull request creation uses the v2 schema with `source` and `destination`
 objects rather than `fromRef`/`toRef`.
@@ -52,8 +52,8 @@ log = get_logger("adapters.bitbucket_cloud")
 class BitbucketCloudSettings:
     base_url: str
     workspace: str
-    username: str
-    app_password: str
+    account: str
+    token: str
     default_branch: str = "main"
     request_timeout: int = 30
 
@@ -65,13 +65,13 @@ class BitbucketCloudHosting(RepoHosting):
     def resolve_repo(self, slug: str) -> RepoLocation:
         s = self._settings
         clone_url = (
-            f"https://{s.username}:{s.app_password}"
+            f"https://{s.account}:{s.token}"
             f"@bitbucket.org/{s.workspace}/{slug}.git"
         )
         web_url = f"https://bitbucket.org/{s.workspace}/{slug}"
         return RepoLocation(
             slug=slug,
-            project_key=s.workspace,
+            namespace=s.workspace,
             default_branch=s.default_branch,
             clone_url=clone_url,
             web_url=web_url,
@@ -84,7 +84,7 @@ class BitbucketCloudHosting(RepoHosting):
         if repo_path.exists():
             log.info(f"Repository already present, updating: {repo_path}")
             default_branch = (
-                    self._detect_default_branch(repo_path) or repo.default_branch
+                self._detect_default_branch(repo_path) or repo.default_branch
             )
             self._run_git(["fetch", "origin"], cwd=repo_path)
             self._run_git(
@@ -106,7 +106,7 @@ class BitbucketCloudHosting(RepoHosting):
         self._run_git(["checkout", "-b", branch.name], cwd=repo_path)
 
     def commit_changes(
-            self, repo_path: Path, message: str
+        self, repo_path: Path, message: str
     ) -> CommitInfo | None:
         self._run_git(["add", "-A"], cwd=repo_path)
         status = self._run_git(["status", "--porcelain"], cwd=repo_path)
@@ -138,7 +138,7 @@ class BitbucketCloudHosting(RepoHosting):
         )
 
     def get_changed_files(
-            self, repo_path: Path, base_branch: str
+        self, repo_path: Path, base_branch: str
     ) -> list[FileChange]:
         try:
             output = self._run_git(
@@ -163,12 +163,12 @@ class BitbucketCloudHosting(RepoHosting):
         return result
 
     def open_pull_request(
-            self,
-            repo: RepoLocation,
-            source_branch: str,
-            target_branch: str,
-            title: str,
-            description: str,
+        self,
+        repo: RepoLocation,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
     ) -> PullRequest:
         s = self._settings
         url = (
@@ -185,7 +185,7 @@ class BitbucketCloudHosting(RepoHosting):
         try:
             response = requests.post(
                 url,
-                auth=HTTPBasicAuth(s.username, s.app_password),
+                auth=HTTPBasicAuth(s.account, s.token),
                 headers={
                     "Accept": "application/json",
                     "Content-Type": "application/json",
@@ -214,10 +214,10 @@ class BitbucketCloudHosting(RepoHosting):
         )
 
     def _run_git(
-            self,
-            args: list[str],
-            cwd: Path | None = None,
-            check: bool = True,
+        self,
+        args: list[str],
+        cwd: Path | None = None,
+        check: bool = True,
     ) -> str:
         cmd = ["git"] + args
         log.info(f"git {' '.join(_redact_args(args))}")

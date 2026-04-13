@@ -18,14 +18,14 @@ issue_tracker:
   trigger_label: ai-pipeline
   processing_label: ai-processing
   status: Backlog
-  username: ${JIRA_USERNAME}
+  account: ${JIRA_USERNAME}
   token: ${JIRA_TOKEN}
 
 repo_hosting:
   type: bitbucket_dc
   base_url: https://code.example-corp.ch
-  project_key: mvp_oevp
-  username: ${BITBUCKET_USERNAME}
+  namespace: mvp_oevp
+  account: ${BITBUCKET_USERNAME}
   token: ${BITBUCKET_TOKEN}
   default_branch: master
   # Branch pattern must match the project's branch permission rules.

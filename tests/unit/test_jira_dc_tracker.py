@@ -15,7 +15,7 @@ def make_tracker():
         JiraDataCenterSettings(
             base_url="https://jira.example.com",
             project="NOVA",
-            username="testuser",
+            account="testuser",
             token="test-token",
         )
     )

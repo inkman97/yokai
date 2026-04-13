@@ -42,10 +42,16 @@ class Story:
 
 @dataclass
 class RepoLocation:
-    """Identifies a repository on a hosting provider."""
+    """Identifies a repository on a hosting provider.
+
+    `namespace` is the container that groups repositories on the
+    hosting provider: a project key on Bitbucket Data Center, a
+    workspace slug on Bitbucket Cloud, an owner on GitHub, a group
+    on GitLab.
+    """
 
     slug: str
-    project_key: str
+    namespace: str
     default_branch: str = "master"
     clone_url: str | None = None
     web_url: str | None = None

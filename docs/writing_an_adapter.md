@@ -162,7 +162,7 @@ issue_tracker:
   trigger_label: ai-pipeline
   processing_label: ai-processing
   status: open
-  username: ${GITHUB_USERNAME}
+  account: ${GITHUB_USERNAME}
   token: ${GITHUB_TOKEN}
 ```
 
@@ -201,32 +201,38 @@ agent step.
 
 `yokai` ships with adapters for both Atlassian Data Center (`jira_dc`,
 `bitbucket_dc`) and Atlassian Cloud (`jira_cloud`, `bitbucket_cloud`).
-The cloud adapters reuse the same `IssueTrackerConfig` and
-`RepoHostingConfig` field names as the data center ones, but with
-slightly different semantics that are documented in each adapter's
-module docstring:
 
-For `jira_cloud`:
-- `username` carries the Atlassian account email
-- `token` carries an API token from id.atlassian.com
+The framework config uses **provider-neutral field names** that
+translate cleanly across both deployment models:
 
-For `bitbucket_cloud`:
-- `project_key` carries the Bitbucket Cloud workspace slug (Cloud has
-  no "project" concept)
-- `username` carries the Atlassian/Bitbucket account username
-- `token` carries a Bitbucket Cloud app password
+- `IssueTrackerConfig.account` is the identity you authenticate with:
+  on Jira Data Center it is the username tied to the Personal Access
+  Token; on Jira Cloud it is the Atlassian account email.
+- `RepoHostingConfig.account` is the identity you authenticate with:
+  on Bitbucket Data Center it is the username tied to the HTTP Access
+  Token; on Bitbucket Cloud it is the Bitbucket account username.
+- `RepoHostingConfig.namespace` is the container that groups
+  repositories on the hosting provider: on Bitbucket Data Center it is
+  the project key, on Bitbucket Cloud it is the workspace slug, and
+  on hypothetical future adapters it would be the GitHub organization
+  or the GitLab group.
+- `RepoHostingConfig.token` is the secret used to authenticate: on
+  Data Center it is an HTTP Access Token, on Cloud it is an app
+  password.
 
-This is a deliberate non-invasive design choice: it lets you switch
-from a Data Center setup to a Cloud setup by changing the `type` field
-and the credentials, without modifying the framework's config schema.
-If you write a new cloud adapter (Linear, GitHub, GitLab, etc.), follow
-the same convention: reuse the existing config fields with adapter-
-specific semantics and document the mapping in the adapter's docstring.
+This neutral naming lets you switch from a Data Center setup to a
+Cloud setup by changing only the `type` field and the credentials:
+the structure of the YAML is unchanged. It also means that when you
+add a new adapter for a different provider (GitHub, GitLab, Linear)
+you reuse the same slots without expanding the framework config
+schema. Each adapter documents in its module docstring how it
+interprets `account`, `namespace`, and `token` for its specific
+provider.
 
-If your adapter genuinely needs a field that does not fit any existing
-slot, you can always pull it from an environment variable directly
-inside your settings dataclass instead of expanding the framework
-config schema.
+If your new adapter genuinely needs a field that does not fit any
+existing slot, you can always read it from an environment variable
+directly inside your settings dataclass instead of expanding the
+framework config schema.
 
 ## Contributing your adapter back
 

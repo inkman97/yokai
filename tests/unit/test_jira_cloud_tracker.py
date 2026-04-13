@@ -19,8 +19,8 @@ def make_tracker():
         JiraCloudSettings(
             base_url="https://acme.atlassian.net",
             project="NOVA",
-            email="alice@example.com",
-            api_token="cloud-token",
+            account="alice@example.com",
+            token="cloud-token",
         )
     )
 
@@ -80,8 +80,8 @@ class TestSearchPendingStories:
         assert stories[0].components == ["EMU-BE"]
         assert "ai-pipeline" in stories[0].labels
         assert (
-                stories[0].url
-                == "https://acme.atlassian.net/browse/NOVA-201"
+            stories[0].url
+            == "https://acme.atlassian.net/browse/NOVA-201"
         )
 
     @responses.activate
@@ -132,7 +132,7 @@ class TestSearchPendingStories:
             tracker.search_pending_stories()
 
     @responses.activate
-    def test_uses_basic_auth_with_email_and_token(self):
+    def test_uses_basic_auth_with_account_and_token(self):
         responses.add(
             responses.GET,
             "https://acme.atlassian.net/rest/api/3/search",

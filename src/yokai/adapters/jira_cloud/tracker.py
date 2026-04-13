@@ -2,13 +2,13 @@
 
 Uses the Jira Cloud REST API v3 with HTTP Basic authentication. On Jira
 Cloud the credentials are an Atlassian account email plus an API token
-generated from id.atlassian.com, not a username/password pair.
+generated from id.atlassian.com.
 
 Mapping to FrameworkConfig fields:
-- IssueTrackerConfig.username  -> Atlassian account email
-- IssueTrackerConfig.token     -> API token from id.atlassian.com
-- IssueTrackerConfig.base_url  -> https://your-site.atlassian.net
-- IssueTrackerConfig.project   -> project key (same concept as DC)
+- IssueTrackerConfig.account  -> Atlassian account email
+- IssueTrackerConfig.token    -> API token from id.atlassian.com
+- IssueTrackerConfig.base_url -> https://your-site.atlassian.net
+- IssueTrackerConfig.project  -> Jira project key
 
 The Cloud v3 API returns issue descriptions in Atlassian Document Format
 (ADF), which is a structured JSON tree rather than plain text. This
@@ -36,8 +36,8 @@ log = get_logger("adapters.jira_cloud")
 class JiraCloudSettings:
     base_url: str
     project: str
-    email: str
-    api_token: str
+    account: str
+    token: str
     trigger_label: str = "ai-pipeline"
     processing_label: str = "ai-processing"
     status: str = "Backlog"
@@ -48,7 +48,7 @@ class JiraCloudTracker(IssueTracker):
     def __init__(self, settings: JiraCloudSettings):
         self._settings = settings
         self._session = requests.Session()
-        self._session.auth = HTTPBasicAuth(settings.email, settings.api_token)
+        self._session.auth = HTTPBasicAuth(settings.account, settings.token)
         self._session.headers.update(
             {
                 "Accept": "application/json",

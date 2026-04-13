@@ -8,8 +8,16 @@ Authentication is done with HTTP access tokens. The token is passed to
 git via http.extraheader to avoid placing it in the clone URL, which
 breaks on tokens containing slash or plus characters.
 
+Mapping to FrameworkConfig fields:
+- RepoHostingConfig.base_url   -> https://your-bitbucket-dc-host
+- RepoHostingConfig.namespace  -> Bitbucket DC project key (e.g. MVP_OEVP)
+- RepoHostingConfig.account    -> username associated with the token
+- RepoHostingConfig.token      -> HTTP Access Token (Bearer)
+
 Note on case sensitivity: Bitbucket DC uses the project key in lowercase
-for the /scm/ clone path but uppercase for the REST API path.
+for the /scm/ clone path but uppercase for the REST API path. The
+adapter normalizes case as needed so the user can supply either form
+in the namespace field.
 """
 
 from __future__ import annotations
@@ -41,8 +49,8 @@ log = get_logger("adapters.bitbucket_dc")
 @dataclass
 class BitbucketDataCenterSettings:
     base_url: str
-    project_key: str
-    username: str
+    namespace: str
+    account: str
     token: str
     default_branch: str = "master"
     request_timeout: int = 30
@@ -55,14 +63,14 @@ class BitbucketDataCenterHosting(RepoHosting):
     def resolve_repo(self, slug: str) -> RepoLocation:
         s = self._settings
         clone_url = (
-            f"{s.base_url}/scm/{s.project_key.lower()}/{slug}.git"
+            f"{s.base_url}/scm/{s.namespace.lower()}/{slug}.git"
         )
         web_url = (
-            f"{s.base_url}/projects/{s.project_key.upper()}/repos/{slug}/browse"
+            f"{s.base_url}/projects/{s.namespace.upper()}/repos/{slug}/browse"
         )
         return RepoLocation(
             slug=slug,
-            project_key=s.project_key,
+            namespace=s.namespace,
             default_branch=s.default_branch,
             clone_url=clone_url,
             web_url=web_url,
@@ -165,7 +173,7 @@ class BitbucketDataCenterHosting(RepoHosting):
         description: str,
     ) -> PullRequest:
         s = self._settings
-        project_upper = s.project_key.upper()
+        project_upper = s.namespace.upper()
         url = (
             f"{s.base_url}/rest/api/1.0/projects/{project_upper}"
             f"/repos/{repo.slug}/pull-requests"

@@ -64,8 +64,8 @@ def hosting_with_local_remote(remote_repo: Path) -> BitbucketDataCenterHosting:
     """A hosting instance whose 'clone url' points at our bare local repo."""
     settings = BitbucketDataCenterSettings(
         base_url="https://example.com",
-        project_key="testproj",
-        username="tester",
+        namespace="testproj",
+        account="tester",
         token="ignored-locally",
     )
     hosting = BitbucketDataCenterHosting(settings)

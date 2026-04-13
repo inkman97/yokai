@@ -87,7 +87,7 @@ def _build_jira_dc(config: FrameworkConfig) -> IssueTracker:
         JiraDataCenterSettings(
             base_url=s.base_url,
             project=s.project,
-            username=s.username,
+            account=s.account,
             token=s.token,
             trigger_label=s.trigger_label,
             processing_label=s.processing_label,
@@ -101,8 +101,8 @@ def _build_bitbucket_dc(config: FrameworkConfig) -> RepoHosting:
     return BitbucketDataCenterHosting(
         BitbucketDataCenterSettings(
             base_url=s.base_url,
-            project_key=s.project_key,
-            username=s.username,
+            namespace=s.namespace,
+            account=s.account,
             token=s.token,
             default_branch=s.default_branch,
         )
@@ -115,8 +115,8 @@ def _build_jira_cloud(config: FrameworkConfig) -> IssueTracker:
         JiraCloudSettings(
             base_url=s.base_url,
             project=s.project,
-            email=s.username,
-            api_token=s.token,
+            account=s.account,
+            token=s.token,
             trigger_label=s.trigger_label,
             processing_label=s.processing_label,
             status=s.status,
@@ -129,9 +129,9 @@ def _build_bitbucket_cloud(config: FrameworkConfig) -> RepoHosting:
     return BitbucketCloudHosting(
         BitbucketCloudSettings(
             base_url=s.base_url,
-            workspace=s.project_key,
-            username=s.username,
-            app_password=s.token,
+            workspace=s.namespace,
+            account=s.account,
+            token=s.token,
             default_branch=s.default_branch,
         )
     )

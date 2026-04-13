@@ -22,20 +22,20 @@ def make_hosting():
     return BitbucketDataCenterHosting(
         BitbucketDataCenterSettings(
             base_url="https://code.example.com",
-            project_key="myproj",
-            username="testuser",
+            namespace="myproj",
+            account="testuser",
             token="bb-token",
         )
     )
 
 
 class TestResolveRepo:
-    def test_clone_url_uses_lowercase_project_key(self):
+    def test_clone_url_uses_lowercase_namespace(self):
         hosting = make_hosting()
         loc = hosting.resolve_repo("my-repo")
         assert "/scm/myproj/my-repo.git" in loc.clone_url
 
-    def test_web_url_uses_uppercase_project_key(self):
+    def test_web_url_uses_uppercase_namespace(self):
         hosting = make_hosting()
         loc = hosting.resolve_repo("my-repo")
         assert "/projects/MYPROJ/repos/my-repo" in loc.web_url
@@ -71,7 +71,7 @@ class TestOpenPullRequest:
         hosting = make_hosting()
         repo = RepoLocation(
             slug="my-repo",
-            project_key="myproj",
+            namespace="myproj",
             default_branch="master",
         )
         pr = hosting.open_pull_request(
@@ -96,7 +96,7 @@ class TestOpenPullRequest:
         )
         hosting = make_hosting()
         repo = RepoLocation(
-            slug="my-repo", project_key="myproj", default_branch="master"
+            slug="my-repo", namespace="myproj", default_branch="master"
         )
         hosting.open_pull_request(
             repo=repo,
@@ -119,7 +119,7 @@ class TestOpenPullRequest:
         )
         hosting = make_hosting()
         repo = RepoLocation(
-            slug="my-repo", project_key="myproj", default_branch="master"
+            slug="my-repo", namespace="myproj", default_branch="master"
         )
         hosting.open_pull_request(
             repo=repo,
@@ -143,7 +143,7 @@ class TestOpenPullRequest:
         )
         hosting = make_hosting()
         repo = RepoLocation(
-            slug="my-repo", project_key="myproj", default_branch="master"
+            slug="my-repo", namespace="myproj", default_branch="master"
         )
         with pytest.raises(RepoHostingError, match="Failed to create pull request"):
             hosting.open_pull_request(

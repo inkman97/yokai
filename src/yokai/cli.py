@@ -37,14 +37,14 @@ issue_tracker:
   trigger_label: ai-pipeline
   processing_label: ai-processing
   status: Backlog
-  username: ${JIRA_USERNAME}
+  account: ${JIRA_USERNAME}
   token: ${JIRA_TOKEN}
 
 repo_hosting:
   type: bitbucket_dc
   base_url: https://code.example.com
-  project_key: myproj
-  username: ${BITBUCKET_USERNAME}
+  namespace: myproj
+  account: ${BITBUCKET_USERNAME}
   token: ${BITBUCKET_TOKEN}
   default_branch: master
   branch_pattern: "feature/{issue_key}-ai-{timestamp}"
