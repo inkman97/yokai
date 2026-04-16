@@ -1,14 +1,20 @@
 """Command-line interface for yokai.
 
 Subcommands:
-- run    : start the orchestrator polling loop
-- status : show recent story executions from the store
-- init   : print a starter YAML config to stdout
+- run            : start the legacy monolithic orchestrator (single process)
+- coordinator    : start the async coordinator (polls tracker, enqueues jobs)
+- worker         : start an async worker (dequeues jobs, runs agent)
+- result-handler : start the result handler (postprocesses agent results into PRs)
+- queue-status   : show the current queue state
+- queue-retry    : requeue a dead-lettered or failed job by id
+- status         : show recent story executions from the legacy store
+- init           : print a starter YAML config to stdout
 """
 
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 from pathlib import Path
 
@@ -72,6 +78,30 @@ orchestrator:
 storage:
   type: sqlite
   path: ~/.yokai/state.db
+
+# Optional: enables async coordinator/worker mode.
+# Omit this block to use only the legacy `yokai run` monolithic mode.
+queue:
+  backend: sqlite       # sqlite | memory | redis
+  db_path: ~/.yokai/queue.db
+  # For backend: redis, set redis_url instead of db_path:
+  # redis_url: redis://localhost:6379/0
+  # redis_url: redis://:password@redis.example.com:6379/0
+  coordinator:
+    poll_interval_seconds: 30
+    lease_duration_seconds: 90
+    reclaim_interval_seconds: 60
+    max_attempts_per_job: 3
+  worker:
+    poll_interval_seconds: 2
+    agent_timeout_seconds: 1800
+    lease_duration_seconds: 1800
+    heartbeat_interval_seconds: 15
+    retry_backoff_base_seconds: 5
+    retry_backoff_cap_seconds: 300
+  result_handler:
+    poll_interval_seconds: 5
+    batch_size: 10
 
 plugins: []
 """
@@ -146,6 +176,205 @@ def cmd_init(args: argparse.Namespace) -> int:
         sys.stdout.write(STARTER_CONFIG)
     return 0
 
+def _load_async_config(args):
+    """Load config and verify the queue section is present."""
+    from yokai.async_factory import build_coordinator  # noqa: F401
+
+    config = load_config(args.config)
+    if config.queue is None:
+        raise ConfigurationError(
+            "queue section missing in config; required for async commands. "
+            "Run `yokai init` to see an example."
+        )
+    return config
+
+
+def _install_signal_handlers(component) -> None:
+    """SIGTERM/SIGINT -> component.stop()."""
+    def handler(signum, frame):
+        log.info(f"Received signal {signum}, requesting graceful shutdown")
+        component.stop()
+
+    try:
+        signal.signal(signal.SIGTERM, handler)
+        signal.signal(signal.SIGINT, handler)
+    except ValueError:
+        # Not in main thread (some test runners). Ignore.
+        pass
+
+
+def cmd_coordinator(args: argparse.Namespace) -> int:
+    configure_logging(args.log_level)
+    try:
+        config = _load_async_config(args)
+        from yokai.async_factory import build_coordinator
+        coordinator = build_coordinator(config)
+    except ConfigurationError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        return 2
+
+    _install_signal_handlers(coordinator)
+    log.info(f"Starting coordinator {coordinator.coordinator_id}")
+    coordinator.run()
+    return 0
+
+
+def cmd_worker(args: argparse.Namespace) -> int:
+    configure_logging(args.log_level)
+    try:
+        config = _load_async_config(args)
+        from yokai.async_factory import build_worker
+        worker = build_worker(config)
+    except ConfigurationError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        return 2
+
+    _install_signal_handlers(worker)
+    log.info(f"Starting worker {worker.worker_id}")
+    worker.run()
+    return 0
+
+
+def cmd_result_handler(args: argparse.Namespace) -> int:
+    configure_logging(args.log_level)
+    try:
+        config = _load_async_config(args)
+        from yokai.async_factory import build_result_handler
+        handler = build_result_handler(config)
+    except ConfigurationError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        return 2
+
+    _install_signal_handlers(handler)
+    log.info("Starting result handler")
+    handler.run()
+    return 0
+
+
+def cmd_queue_status(args: argparse.Namespace) -> int:
+    configure_logging(args.log_level)
+    try:
+        config = _load_async_config(args)
+        from yokai.async_factory import build_backend_only
+        backend = build_backend_only(config)
+    except ConfigurationError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        return 2
+
+    from yokai.queue.models import JobStatus
+    from datetime import timedelta
+
+    print("=" * 60)
+    print("Job counts by status")
+    print("=" * 60)
+    stats = backend.stats()
+    total = sum(stats.values())
+    for status in JobStatus:
+        n = stats[status]
+        if n > 0 or status in (
+            JobStatus.QUEUED,
+            JobStatus.PICKED_UP,
+            JobStatus.AGENT_RUNNING,
+            JobStatus.AGENT_COMPLETED,
+            JobStatus.DONE,
+            JobStatus.FAILED,
+            JobStatus.DEAD_LETTERED,
+        ):
+            print(f"  {status.value:<20} {n}")
+    print(f"  {'TOTAL':<20} {total}")
+    print()
+
+    # Live workers
+    print("=" * 60)
+    print("Workers (last heartbeat within 60s)")
+    print("=" * 60)
+    alive = backend.list_alive(timedelta(seconds=60))
+    if not alive:
+        print("  (none)")
+    else:
+        for w in alive:
+            cj = w.current_job_id or "(idle)"
+            print(f"  {w.worker_id:<40} job={cj}")
+    print()
+
+    # Recent failures and dead-letters
+    print("=" * 60)
+    print(f"Most recent {args.limit} dead-lettered jobs")
+    print("=" * 60)
+    dead = backend.list_by_status(JobStatus.DEAD_LETTERED, limit=args.limit)
+    if not dead:
+        print("  (none)")
+    else:
+        for j in dead:
+            err = (j.last_error or "")[:80]
+            print(f"  {j.story_key:<15} {j.job_id[:8]} attempts={j.attempts} {err}")
+    return 0
+
+
+def cmd_queue_retry(args: argparse.Namespace) -> int:
+    configure_logging(args.log_level)
+    try:
+        config = _load_async_config(args)
+        from yokai.async_factory import build_backend_only
+        backend = build_backend_only(config)
+    except ConfigurationError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        return 2
+
+    from yokai.queue.exceptions import (
+        InvalidStateTransition,
+        JobNotFound,
+    )
+    from yokai.queue.models import JobStatus
+
+    try:
+        job = backend.get(args.job_id)
+    except JobNotFound:
+        print(f"Job not found: {args.job_id}", file=sys.stderr)
+        return 1
+
+    print(f"Job {job.job_id}")
+    print(f"  story_key: {job.story_key}")
+    print(f"  status:    {job.status.value}")
+    print(f"  attempts:  {job.attempts}/{job.max_attempts}")
+    print(f"  last_error: {(job.last_error or '')[:200]}")
+    print()
+
+    if job.status not in (
+        JobStatus.DEAD_LETTERED,
+        JobStatus.FAILED,
+    ):
+        print(
+            f"Refusing to retry: job is in status {job.status.value}, "
+            f"only DEAD_LETTERED or FAILED can be retried.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Reset attempts so the worker has the full retry budget again
+    print("Requeueing...")
+    # Direct DB-level reset; the state machine does not allow
+    # DEAD_LETTERED/FAILED -> QUEUED, so we use a lower-level approach:
+    # we delete and re-enqueue with a fresh job_id and status.
+    # Simpler: since both are terminal, re-enqueue under a new job.
+    from yokai.queue.models import Job
+
+    new_job = Job.new(
+        story_key=job.story_key,
+        repo_slug=job.repo_slug,
+        payload=job.payload,
+        max_attempts=job.max_attempts,
+    )
+    try:
+        backend.enqueue(new_job)
+    except Exception as e:
+        print(f"Re-enqueue failed: {e}", file=sys.stderr)
+        return 1
+
+    print(f"Re-enqueued as new job: {new_job.job_id}")
+    return 0
+
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -182,6 +411,53 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Overwrite existing file"
     )
     p_init.set_defaults(func=cmd_init)
+
+    p_coord = sub.add_parser(
+        "coordinator",
+        help="Start the async coordinator (polls tracker, enqueues jobs)",
+    )
+    p_coord.add_argument(
+        "--config", "-c", required=True, help="Path to YAML config"
+    )
+    p_coord.set_defaults(func=cmd_coordinator)
+
+    p_worker = sub.add_parser(
+        "worker",
+        help="Start an async worker (dequeues jobs, runs agent)",
+    )
+    p_worker.add_argument(
+        "--config", "-c", required=True, help="Path to YAML config"
+    )
+    p_worker.set_defaults(func=cmd_worker)
+
+    p_rh = sub.add_parser(
+        "result-handler",
+        help="Start the result handler (postprocesses agent results into PRs)",
+    )
+    p_rh.add_argument(
+        "--config", "-c", required=True, help="Path to YAML config"
+    )
+    p_rh.set_defaults(func=cmd_result_handler)
+
+    p_qs = sub.add_parser(
+        "queue-status",
+        help="Show the current queue state (counts, workers, dead-letters)",
+    )
+    p_qs.add_argument(
+        "--config", "-c", required=True, help="Path to YAML config"
+    )
+    p_qs.add_argument("--limit", type=int, default=20)
+    p_qs.set_defaults(func=cmd_queue_status)
+
+    p_qr = sub.add_parser(
+        "queue-retry",
+        help="Re-enqueue a dead-lettered or failed job by id",
+    )
+    p_qr.add_argument(
+        "--config", "-c", required=True, help="Path to YAML config"
+    )
+    p_qr.add_argument("job_id", help="The job id to retry")
+    p_qr.set_defaults(func=cmd_queue_retry)
 
     return parser
 

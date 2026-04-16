@@ -42,8 +42,9 @@ coding agent CLI.
 
 Early alpha. The core orchestrator, the Jira Data Center, Bitbucket
 Data Center, Jira Cloud, and Bitbucket Cloud adapters, and the
-Claude Code adapter are working and tested. The API is unstable and
-may change.
+Claude Code adapter are working and tested. Since 0.2.0 an optional
+async mode is available with SQLite and Redis backends. The API is
+unstable and may change.
 
 ## Features
 
@@ -51,11 +52,19 @@ may change.
   coding agent, router, or storage by implementing a small interface.
 - Built-in adapters for Jira Data Center, Bitbucket Data Center,
   Jira Cloud, Bitbucket Cloud, and Claude Code CLI.
+- Two deployment modes: simple monolithic (`yokai run`) and scaled
+  async (coordinator + worker(s) + result-handler) sharing a
+  persistent queue.
+- Pluggable queue backends (in-memory, SQLite, Redis) for the async
+  mode, so a single laptop setup and a multi-host production cluster
+  use the same code.
 - Parallel processing with per-repository locking: stories on different
   repos run concurrently, stories on the same repo serialize.
 - In-flight deduplication: a story is never picked up twice while it
   is being processed, even if the issue tracker label update is
   delayed.
+- Automatic retry with exponential backoff and dead-letter queue for
+  jobs that exceed `max_attempts`.
 - Plugin system with lifecycle hooks: register callbacks for events
   like `after_agent_run` or `on_failure` without forking the framework.
 - Persistent execution state via SQLite, surviving process restarts.
@@ -64,12 +73,64 @@ may change.
   Bitbucket Cloud clone URLs.
 - Idempotent commands and safe failure recovery.
 
+## Deployment modes
+
+yokai can run in two modes, chosen via config:
+
+### Monolithic mode: `yokai run`
+
+One process polls the tracker, runs the agent, opens PRs. This is the
+simplest setup and has been the default since version 0.1. It is still
+the recommended mode for single-developer laptop use.
+
+### Async mode: `yokai coordinator` + `yokai worker` + `yokai result-handler`
+
+Three roles, three processes, a persistent queue in between. Added in
+0.2.0. Use this when you want:
+
+- **Resilience**: jobs survive process crashes (the queue persists).
+- **Scale**: run multiple workers in parallel, on the same host or
+  on different hosts.
+- **Separation of concerns**: polling, agent execution, and PR
+  creation can be monitored and restarted independently.
+
+```
++---------------+    enqueue    +-----------------+
+| Coordinator   | ------------> |  Job Queue      |
+| (polls Jira)  |               |  (SQLite/Redis) |
++---------------+               |                 |
+                                |                 |
++---------------+    dequeue    |                 |
+| Worker(s)     | <------------ |                 |
+| (run agent)   |               |                 |
++---------------+    write      |                 |
+       |          ------------> |  Result Store   |
+       v                        |                 |
++---------------+    read       |                 |
+| ResultHandler | <------------ |                 |
+| (commit + PR) |               +-----------------+
++---------------+
+```
+
+Backends for the queue:
+
+- **SQLite** (default): single file, no external services, good for
+  single-host deployments.
+- **Redis**: multi-host, production-grade. Install with the `[redis]`
+  extra.
+- **In-memory**: tests and experiments only.
+
+See [`docs/async_mode.md`](docs/async_mode.md) for the full operational
+guide.
+
 ## Quickstart
 
 ### 1. Install
 
 ```bash
 pip install yokai-cli
+# or with Redis support:
+pip install yokai-cli[redis]
 ```
 
 You also need:
@@ -106,25 +167,32 @@ In Jira, add the label `ai-pipeline` to a story in the Backlog status.
 Make sure the story has a component that matches one of the entries
 in your `routing.components` map, or add a label like `repo:my-repo`.
 
-Then run the orchestrator:
+Then start yokai. Pick one mode:
+
+**Monolithic (simplest)**:
 
 ```bash
 yokai run --config config.yaml
 ```
 
-It will poll Jira every 30 seconds. When it sees the labelled story, it
-clones the target repo, runs Claude Code, opens a pull request, and
-posts two comments back on the Jira story (a short link comment and a
-detailed agent output comment).
+**Async on one host (more resilient)**:
+
+```bash
+# in three separate terminals
+yokai coordinator    --config config.yaml
+yokai worker         --config config.yaml
+yokai result-handler --config config.yaml
+```
+
+Either way, it polls Jira, clones the target repo, runs Claude Code,
+opens a pull request, and posts two comments back on the Jira story.
 
 ### 5. Inspect history
 
 ```bash
-yokai status --config config.yaml
+yokai status --config config.yaml        # legacy SQLite execution store
+yokai queue-status --config config.yaml  # async queue state (jobs, workers, dead-letters)
 ```
-
-Shows the most recent story executions stored in the SQLite state
-database, with their status and pull request URL.
 
 ## Architecture
 
@@ -132,16 +200,30 @@ The core of the framework is a small set of abstract interfaces:
 
 | Interface | Responsibility | Built-in implementation |
 |---|---|---|
-| `IssueTracker` | search, comment, label stories | `JiraDataCenterTracker` |
-| `RepoHosting` | clone, branch, commit, push, open PR | `BitbucketDataCenterHosting` |
+| `IssueTracker` | search, comment, label stories | `JiraDataCenterTracker`, `JiraCloudTracker` |
+| `RepoHosting` | clone, branch, commit, push, open PR | `BitbucketDataCenterHosting`, `BitbucketCloudHosting` |
 | `CodingAgent` | run an AI agent in a working tree | `ClaudeCodeAgent` |
 | `StoryRouter` | resolve a story to a repository | `ComponentMapRouter`, `LabelPrefixRouter`, `ChainRouter` |
 | `NotificationSink` | post events to humans | `LoggerNotificationSink`, `SlackWebhookSink` |
-| `ExecutionStore` | persist execution state | `InMemoryExecutionStore`, `SqliteExecutionStore` |
+| `ExecutionStore` | persist story execution state (legacy mode) | `InMemoryExecutionStore`, `SqliteExecutionStore` |
 
-The `Pipeline` class depends only on these interfaces. Concrete adapters
-are constructed by the `factory.build_pipeline(config)` function from a
+The monolithic `Pipeline` depends only on these interfaces. Concrete
+adapters are constructed by `factory.build_pipeline(config)` from a
 `FrameworkConfig` loaded from YAML.
+
+The async mode adds four more interfaces in `yokai.queue`:
+
+| Interface | Responsibility | Built-in implementation |
+|---|---|---|
+| `JobQueue` | enqueue, dequeue (with lease), update status | `InMemoryBackend`, `SqliteBackend`, `RedisBackend` |
+| `ResultStore` | store and retrieve agent results | same as above |
+| `WorkerRegistry` | track live workers via heartbeats | same as above |
+| `CoordinatorLock` | leader-election lock for coordinator HA | same as above |
+
+These are wrapped around the existing adapters by the
+`yokai.queue_adapters` bridge layer, so async mode automatically
+supports every combination (Jira DC/Cloud x Bitbucket DC/Cloud) that
+legacy mode supports.
 
 To add support for a different system (GitHub Issues, GitLab, Linear,
 Aider, OpenCode, etc.), implement the relevant interface and register
@@ -149,21 +231,28 @@ the new builder. See `docs/writing_an_adapter.md`.
 
 ### Concurrency
 
-The orchestrator uses a `ThreadPoolExecutor` to process multiple stories
-in parallel up to `max_parallel_stories`. To prevent two stories from
-trampling each other's working tree on the same repo, each repository
-has its own lock. Two stories on different repositories run truly in
-parallel; two stories on the same repo serialize through the lock.
+**Monolithic mode** uses a `ThreadPoolExecutor` to process multiple
+stories in parallel up to `max_parallel_stories`. To prevent two stories
+from trampling each other's working tree on the same repo, each
+repository has its own lock. Two stories on different repositories run
+truly in parallel; two stories on the same repo serialize through the
+lock.
 
 A separate in-flight registry tracks stories that have been submitted
 to the pool but have not yet had their tracker label updated, so the
 polling loop never submits the same story twice.
 
+**Async mode** achieves parallelism by running multiple worker
+processes. The queue backend handles the mutual exclusion atomically:
+a job is dequeued exactly once, and the coordinator re-queues it only
+if the worker's lease expires. Dedup of in-flight stories is done at
+the queue level via per-story keys.
+
 ### Hooks
 
-The pipeline emits 9 lifecycle events. Plugins register callbacks for
-the events they care about. A failing callback never breaks the
-pipeline, only logs the exception.
+The monolithic pipeline emits 9 lifecycle events. Plugins register
+callbacks for the events they care about. A failing callback never
+breaks the pipeline, only logs the exception.
 
 | Event | When it fires | Payload keys |
 |---|---|---|
@@ -178,26 +267,50 @@ pipeline, only logs the exception.
 | `on_success` | Full flow succeeded | `story`, `pull_request` |
 | `on_failure` | Any error in the flow | `story`, `error` |
 
-See `examples/example_plugin.py` for a working plugin.
+See `examples/example_plugin.py` for a working plugin. Since 0.2.0,
+hooks are emitted in both monolithic and async modes. Plugins written
+against the legacy `Pipeline` (using `pipeline._hooks.register(...)`)
+work unchanged in async mode thanks to a compatibility shim in
+`async_factory` - they receive a small object with `._hooks` just
+like a real Pipeline.
 
 ## Configuration reference
 
 The full configuration is a single YAML file. See
-`examples/enterprise_data_center.yaml` for an annotated example.
+`examples/enterprise_data_center.yaml` for an annotated example of the
+legacy monolithic mode.
 
 Sections:
 
-- **`issue_tracker`** — connection and filtering for the issue source
-- **`repo_hosting`** — connection and branch policy for the repo host
-- **`agent`** — coding agent command and timeouts
-- **`routing`** — how to resolve stories to repositories
-- **`orchestrator`** — polling and parallelism settings
-- **`storage`** — execution state persistence (memory or sqlite)
-- **`plugins`** — list of dotted import paths to plugin install
+- **`issue_tracker`** - connection and filtering for the issue source
+- **`repo_hosting`** - connection and branch policy for the repo host
+- **`agent`** - coding agent command and timeouts
+- **`routing`** - how to resolve stories to repositories
+- **`orchestrator`** - polling and parallelism settings (monolithic mode)
+- **`storage`** - execution state persistence for monolithic mode
+  (memory or sqlite)
+- **`queue`** - optional. Enables async mode. Fields: `backend`
+  (sqlite/memory/redis), `db_path`, `redis_url`, and sub-sections for
+  `coordinator`, `worker`, `result_handler`. Omit this section to
+  keep only the monolithic `yokai run` mode.
+- **`plugins`** - list of dotted import paths to plugin install
   functions
 
 Environment variable references like `${VAR_NAME}` are expanded at load
 time. Missing variables raise a clear configuration error.
+
+## CLI reference
+
+| Command | Mode | What it does |
+|---|---|---|
+| `yokai init` | - | Write a starter YAML to stdout or a file |
+| `yokai run` | monolithic | Run the single-process polling orchestrator |
+| `yokai status` | monolithic | List recent executions from the SQLite store |
+| `yokai coordinator` | async | Poll the tracker and enqueue jobs |
+| `yokai worker` | async | Dequeue and run the coding agent |
+| `yokai result-handler` | async | Commit, push, open PR, comment |
+| `yokai queue-status` | async | Show queue counts, live workers, dead-letters |
+| `yokai queue-retry <job-id>` | async | Re-enqueue a dead-lettered or failed job |
 
 ## Development
 
@@ -206,7 +319,7 @@ Clone the repo and install in editable mode with dev extras:
 ```bash
 git clone https://github.com/inkman97/yokai
 cd yokai
-pip install -e .[dev]
+pip install -e ".[dev,redis]"
 ```
 
 Run the test suite:
@@ -215,19 +328,22 @@ Run the test suite:
 pytest
 ```
 
-The test suite has unit tests with HTTP mocking for the Jira and
-Bitbucket adapters, parallelism tests using fake in-memory adapters,
-and an integration test that exercises real git operations against a
-local bare repository (no network needed).
+The test suite (~600 tests) has unit tests with HTTP mocking for the
+Jira and Bitbucket adapters, parallelism tests using fake in-memory
+adapters, an integration test that exercises real git operations
+against a local bare repository (no network needed), and a full
+contract test suite for the three queue backends (in-memory, SQLite,
+Redis via `fakeredis`).
 
 ## Contributing
 
 This project is maintained as a side effort. Contributions are welcome,
 especially:
 
-- Additional issue tracker adapters (Jira Cloud, Linear, GitHub Issues)
-- Additional repo hosting adapters (GitHub, GitLab, Bitbucket Cloud)
+- Additional issue tracker adapters (Linear, GitHub Issues)
+- Additional repo hosting adapters (GitHub, GitLab)
 - Additional coding agent adapters (Aider, OpenCode, Cursor CLI)
+- Additional queue backends (RabbitMQ, PostgreSQL)
 - Bug reports from real on-premise enterprise deployments
 - Improvements to documentation
 

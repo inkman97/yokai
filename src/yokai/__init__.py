@@ -55,7 +55,7 @@ from yokai.storage.sqlite_store import SqliteExecutionStore
 def _read_version() -> str:
     try:
         from importlib.metadata import version
-        return version("yokai")
+        return version("yokai-cli")
     except Exception:
         return "0.0.0+unknown"
 

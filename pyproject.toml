@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yokai-cli"
-version = "0.1.0a10"
+version = "0.2.0a1"
 description = "From issue tracker stories to pull requests via coding agents. A spirit that works while you sleep."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -43,6 +43,11 @@ dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
     "responses>=0.24",
+    "fakeredis>=2.20",
+    "lupa>=2.0",
+]
+redis = [
+    "redis>=4.5",
 ]
 
 [project.scripts]

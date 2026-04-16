@@ -74,6 +74,48 @@ class StorageConfig:
 
 
 @dataclass
+class CoordinatorConfig:
+    poll_interval_seconds: int = 30
+    lease_duration_seconds: int = 90
+    reclaim_interval_seconds: int = 60
+    max_attempts_per_job: int = 3
+
+
+@dataclass
+class WorkerConfig:
+    poll_interval_seconds: float = 2.0
+    agent_timeout_seconds: int = 1800
+    lease_duration_seconds: int = 1800
+    heartbeat_interval_seconds: int = 15
+    retry_backoff_base_seconds: float = 5.0
+    retry_backoff_cap_seconds: float = 300.0
+
+
+@dataclass
+class ResultHandlerConfig:
+    poll_interval_seconds: float = 5.0
+    batch_size: int = 10
+
+
+@dataclass
+class QueueConfig:
+    """Configuration for the async coordinator/worker mode.
+
+    Optional: omit the `queue` block to use only the legacy `yokai run`
+    monolithic mode. Provide it to enable `yokai coordinator`,
+    `yokai worker`, `yokai result-handler`.
+    """
+    backend: str = "sqlite"  # sqlite | memory | redis
+    db_path: str = "~/.yokai/queue.db"
+    redis_url: str | None = None  # required when backend == "redis"
+    coordinator: CoordinatorConfig = field(default_factory=CoordinatorConfig)
+    worker: WorkerConfig = field(default_factory=WorkerConfig)
+    result_handler: ResultHandlerConfig = field(
+        default_factory=ResultHandlerConfig
+    )
+
+
+@dataclass
 class FrameworkConfig:
     issue_tracker: IssueTrackerConfig
     repo_hosting: RepoHostingConfig
@@ -81,6 +123,7 @@ class FrameworkConfig:
     routing: RoutingConfig
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
+    queue: QueueConfig | None = None
     plugins: list[str] = field(default_factory=list)
 
 
@@ -190,6 +233,45 @@ def _parse_storage(data: dict) -> StorageConfig:
     )
 
 
+def _parse_queue(data: dict | None) -> QueueConfig | None:
+    if data is None:
+        return None
+    coord = data.get("coordinator", {})
+    worker = data.get("worker", {})
+    rh = data.get("result_handler", {})
+    return QueueConfig(
+        backend=data.get("backend", "sqlite"),
+        db_path=data.get("db_path", "~/.yokai/queue.db"),
+        redis_url=data.get("redis_url"),
+        coordinator=CoordinatorConfig(
+            poll_interval_seconds=int(coord.get("poll_interval_seconds", 30)),
+            lease_duration_seconds=int(coord.get("lease_duration_seconds", 90)),
+            reclaim_interval_seconds=int(
+                coord.get("reclaim_interval_seconds", 60)
+            ),
+            max_attempts_per_job=int(coord.get("max_attempts_per_job", 3)),
+        ),
+        worker=WorkerConfig(
+            poll_interval_seconds=float(worker.get("poll_interval_seconds", 2.0)),
+            agent_timeout_seconds=int(worker.get("agent_timeout_seconds", 1800)),
+            lease_duration_seconds=int(worker.get("lease_duration_seconds", 1800)),
+            heartbeat_interval_seconds=int(
+                worker.get("heartbeat_interval_seconds", 15)
+            ),
+            retry_backoff_base_seconds=float(
+                worker.get("retry_backoff_base_seconds", 5.0)
+            ),
+            retry_backoff_cap_seconds=float(
+                worker.get("retry_backoff_cap_seconds", 300.0)
+            ),
+        ),
+        result_handler=ResultHandlerConfig(
+            poll_interval_seconds=float(rh.get("poll_interval_seconds", 5.0)),
+            batch_size=int(rh.get("batch_size", 10)),
+        ),
+    )
+
+
 def load_config(path: str | Path) -> FrameworkConfig:
     """Load and validate the framework configuration from a YAML file."""
     config_path = Path(path).expanduser()
@@ -216,5 +298,6 @@ def load_config(path: str | Path) -> FrameworkConfig:
         routing=_parse_routing(_require(expanded, "routing")),
         orchestrator=_parse_orchestrator(expanded.get("orchestrator", {})),
         storage=_parse_storage(expanded.get("storage", {})),
+        queue=_parse_queue(expanded.get("queue")),
         plugins=expanded.get("plugins", []),
     )
