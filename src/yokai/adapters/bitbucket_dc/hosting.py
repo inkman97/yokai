@@ -82,6 +82,15 @@ class BitbucketDataCenterHosting(RepoHosting):
 
         if repo_path.exists():
             log.info(f"Repository already present, updating: {repo_path}")
+            self._run_git(
+                [
+                    "config",
+                    "--local",
+                    "http.extraheader",
+                    f"Authorization: Bearer {self._settings.token}",
+                ],
+                cwd=repo_path,
+            )
             default_branch = self._detect_default_branch(repo_path) or repo.default_branch
             self._run_git(["fetch", "origin"], cwd=repo_path)
             self._run_git(["checkout", default_branch], cwd=repo_path, check=False)
