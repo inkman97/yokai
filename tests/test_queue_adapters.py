@@ -190,15 +190,12 @@ class TestPostprocessorHappyPath:
         hosting.resolve_repo.return_value = RepoLocation(
             slug="r", namespace="ns", default_branch="master"
         )
-        hosting.clone_or_update.return_value = tmp_path / "r"
-        hosting.commit_changes.return_value = CommitInfo(
-            sha="a" * 40,
-            short_sha="aaaaaaa",
-            message="msg",
-            files_changed=2,
-            insertions=10,
-            deletions=3,
-        )
+        repo_dir = tmp_path / "r"
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        import subprocess
+        subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+        subprocess.run(["git", "commit", "--allow-empty", "-m", "init"], cwd=repo_dir, capture_output=True)
+        hosting.clone_or_update.return_value = repo_dir
         hosting.get_changed_files.return_value = [
             FileChange(path="src/x.py", added=5, removed=1),
         ]
@@ -229,47 +226,12 @@ class TestPostprocessorHappyPath:
         assert outcome.success is True
         assert outcome.pr_url == "https://bb.example/r/pr/42"
 
-        hosting.commit_changes.assert_called_once()
-        hosting.push_branch.assert_called_once_with(
-            tmp_path / "r", "feature/K-1-ai"
-        )
+        # Worker did commit+push, so Postprocessor should NOT call them
+        hosting.commit_changes.assert_not_called()
+        hosting.push_branch.assert_not_called()
+        # But PR and comments should happen
         hosting.open_pull_request.assert_called_once()
-        # Two comments: short and detailed
         assert tracker.add_comment.call_count == 2
-
-    def test_no_changes_returns_failure_and_comments(self, tmp_path):
-        hosting, tracker = self._make(tmp_path)
-        hosting.commit_changes.return_value = None
-        post = HostingTrackerPostprocessor(
-            hosting=hosting, tracker=tracker, workspace_dir=tmp_path
-        )
-        outcome = post.run(
-            Job.new("K-1", "r", {"title": "x"}),
-            JobResult(
-                job_id="j", success=True, branch_name="feature/x", duration_seconds=1
-            ),
-        )
-        assert outcome.success is False
-        assert "no changes" in outcome.error.lower()
-        tracker.add_comment.assert_called_once()
-
-    def test_push_failure_returns_error(self, tmp_path):
-        hosting, tracker = self._make(tmp_path)
-        hosting.push_branch.side_effect = RuntimeError("denied")
-        post = HostingTrackerPostprocessor(
-            hosting=hosting, tracker=tracker, workspace_dir=tmp_path
-        )
-        outcome = post.run(
-            Job.new("K-1", "r", {"title": "x"}),
-            JobResult(
-                job_id="j", success=True, branch_name="feature/x",
-                duration_seconds=1,
-            ),
-        )
-        assert outcome.success is False
-        assert "denied" in outcome.error
-        # PR creation must NOT have happened
-        hosting.open_pull_request.assert_not_called()
 
     def test_pr_creation_failure_returns_error(self, tmp_path):
         hosting, tracker = self._make(tmp_path)
@@ -300,7 +262,6 @@ class TestPostprocessorHappyPath:
                 duration_seconds=1,
             ),
         )
-        # PR was created, comment failed - still success
         assert outcome.success is True
         assert outcome.pr_url == "https://bb.example/r/pr/42"
 
@@ -317,7 +278,7 @@ class TestPostprocessorHappyPath:
             ),
         )
         assert outcome.success is False
-        hosting.commit_changes.assert_not_called()
+        hosting.open_pull_request.assert_not_called()
 
     def test_rejects_result_without_branch_name(self, tmp_path):
         hosting, tracker = self._make(tmp_path)

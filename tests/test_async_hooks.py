@@ -253,11 +253,12 @@ def _make_post_mocks(tmp_path):
     hosting.resolve_repo.return_value = RepoLocation(
         slug="r", namespace="ns", default_branch="master"
     )
-    hosting.clone_or_update.return_value = tmp_path / "r"
-    hosting.commit_changes.return_value = CommitInfo(
-        sha="a" * 40, short_sha="aaaaaaa", message="msg",
-        files_changed=2, insertions=10, deletions=3,
-    )
+    repo_dir = tmp_path / "r"
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    import subprocess
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True)
+    subprocess.run(["git", "commit", "--allow-empty", "-m", "init"], cwd=repo_dir, capture_output=True)
+    hosting.clone_or_update.return_value = repo_dir
     hosting.get_changed_files.return_value = [
         FileChange(path="src/x.py", added=5, removed=1),
     ]
@@ -273,7 +274,7 @@ def _make_post_mocks(tmp_path):
 
 
 class TestPostprocessorHooks:
-    def test_happy_path_emits_commit_push_pr_success(
+    def test_happy_path_emits_pr_success(
             self, hooks, recorded_events, tmp_path
     ):
         hosting, tracker = _make_post_mocks(tmp_path)
@@ -296,31 +297,9 @@ class TestPostprocessorHooks:
         assert outcome.success is True
 
         names = [e[0] for e in recorded_events]
-        assert names.count("after_commit") == 1
-        assert names.count("after_push") == 1
         assert names.count("after_pull_request") == 1
         assert names.count("on_success") == 1
         assert "on_failure" not in names
-
-    def test_after_commit_payload_has_commit(
-            self, hooks, recorded_events, tmp_path
-    ):
-        hosting, tracker = _make_post_mocks(tmp_path)
-        post = HostingTrackerPostprocessor(
-            hosting=hosting,
-            tracker=tracker,
-            workspace_dir=tmp_path,
-            hooks=hooks,
-        )
-        post.run(
-            Job.new("K-1", "r", {"title": "x"}),
-            JobResult(
-                job_id="j", success=True, branch_name="b", duration_seconds=1
-            ),
-        )
-        commit_events = [p for (n, p) in recorded_events if n == "after_commit"]
-        assert len(commit_events) == 1
-        assert isinstance(commit_events[0]["commit"], CommitInfo)
 
     def test_after_pull_request_payload_has_pr(
             self, hooks, recorded_events, tmp_path
@@ -363,28 +342,6 @@ class TestPostprocessorHooks:
         assert len(success_events) == 1
         assert isinstance(success_events[0]["pull_request"], PullRequest)
 
-    def test_push_failure_emits_on_failure_not_after_push(
-            self, hooks, recorded_events, tmp_path
-    ):
-        hosting, tracker = _make_post_mocks(tmp_path)
-        hosting.push_branch.side_effect = RuntimeError("denied")
-        post = HostingTrackerPostprocessor(
-            hosting=hosting, tracker=tracker,
-            workspace_dir=tmp_path, hooks=hooks,
-        )
-        post.run(
-            Job.new("K-1", "r", {"title": "x"}),
-            JobResult(
-                job_id="j", success=True, branch_name="b", duration_seconds=1
-            ),
-        )
-        names = [e[0] for e in recorded_events]
-        assert "after_commit" in names
-        assert "after_push" not in names
-        assert "after_pull_request" not in names
-        assert "on_success" not in names
-        assert "on_failure" in names
-
     def test_pr_failure_emits_on_failure(
             self, hooks, recorded_events, tmp_path
     ):
@@ -401,28 +358,7 @@ class TestPostprocessorHooks:
             ),
         )
         names = [e[0] for e in recorded_events]
-        assert "after_push" in names
         assert "on_failure" in names
-        assert "on_success" not in names
-
-    def test_no_changes_emits_on_failure(
-            self, hooks, recorded_events, tmp_path
-    ):
-        hosting, tracker = _make_post_mocks(tmp_path)
-        hosting.commit_changes.return_value = None
-        post = HostingTrackerPostprocessor(
-            hosting=hosting, tracker=tracker,
-            workspace_dir=tmp_path, hooks=hooks,
-        )
-        post.run(
-            Job.new("K-1", "r", {"title": "x"}),
-            JobResult(
-                job_id="j", success=True, branch_name="b", duration_seconds=1
-            ),
-        )
-        names = [e[0] for e in recorded_events]
-        assert "on_failure" in names
-        assert "after_commit" not in names
         assert "on_success" not in names
 
 class TestLegacyPluginAgainstAsyncMode:

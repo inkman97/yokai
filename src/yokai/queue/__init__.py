@@ -4,6 +4,7 @@ from yokai.queue.agent import (
     AgentExecution,
     AgentRunner,
     CheckoutInfo,
+    CommitPushResult,
     RepoCheckout,
 )
 from yokai.queue.backoff import exponential_backoff, no_backoff

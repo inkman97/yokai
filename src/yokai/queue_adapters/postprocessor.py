@@ -1,25 +1,11 @@
 """Bridge to yokai.queue.Postprocessor.
 
-Combines RepoHosting (for commit + push + PR) and IssueTracker (for
-comments + final status) into a single Postprocessor that the
-ResultHandler can invoke when a Worker completes a job successfully.
+Combines RepoHosting and IssueTracker into a single Postprocessor that
+the ResultHandler invokes when a Worker completes a job successfully.
 
-This is essentially the second half of the legacy Pipeline.process_story:
-everything from `commit_changes` to the final Jira comments.
-
-Idempotency note: if commit + push succeeds but PR creation or comment
-fails, the next invocation by the ResultHandler will not retry (the
-Postprocessor is invoked once per AGENT_COMPLETED job; on failure the
-job goes to FAILED, not back to AGENT_COMPLETED). This is intentional:
-recreating commits is dangerous. A failed postprocess requires manual
-intervention via `yokai queue-retry <job-id>`.
-
-Lifecycle hooks: the postprocessor accepts an optional HookRegistry
-and emits the same events as the monolithic Pipeline does for the
-second half of story processing: after_commit, after_push,
-after_pull_request, on_success, on_failure. Plugins registered on the
-HookRegistry receive these events with the same payload shape as the
-legacy Pipeline, so they can be reused unchanged.
+Since 0.2.0a2 the Worker handles commit + push. The Postprocessor only
+needs to: fetch the already-pushed branch, read changed files for the
+PR description, open the PR, and comment on Jira.
 """
 
 from __future__ import annotations
@@ -34,7 +20,7 @@ from yokai.core.formatters import (
 from yokai.core.hooks import HookRegistry
 from yokai.core.interfaces import IssueTracker, RepoHosting
 from yokai.core.logging_setup import get_logger
-from yokai.core.models import AgentResult
+from yokai.core.models import AgentResult, CommitInfo
 from yokai.queue.models import Job, JobResult
 from yokai.queue.postprocessor import PostprocessOutcome, Postprocessor
 from yokai.queue_adapters.agent_runner import job_to_story
@@ -90,12 +76,11 @@ class HostingTrackerPostprocessor(Postprocessor):
                 success=False, error=f"resolve_repo failed: {e}"
             )
 
-        # Re-derive the working tree path. The Worker prepared it via
-        # HostingRepoCheckout in the same workspace_dir.
-        # NOTE: this assumes worker and result handler share the same
-        # workspace (single-host or shared FS deployment). For fully
-        # decoupled hosts, a future adapter would re-clone from the
-        # already-pushed branch.
+        # The Worker already committed and pushed the branch. We only
+        # need the repo_path to read changed files for the PR
+        # description. We do a lightweight clone_or_update (which
+        # fetches the already-pushed branch) and then checkout the
+        # branch the worker pushed.
         try:
             repo_path = self._hosting.clone_or_update(repo, self._workspace_dir)
         except Exception as e:
@@ -104,47 +89,21 @@ class HostingTrackerPostprocessor(Postprocessor):
                 success=False, error=f"clone_or_update failed: {e}"
             )
 
-        commit_message = self._commit_message_template.format(
-            issue_key=story.key, title=story.title
-        )
+        # Checkout the branch the worker pushed so we can read the diff
         try:
-            commit = self._hosting.commit_changes(repo_path, commit_message)
-        except Exception as e:
-            self._emit("on_failure", story=story, error=e)
-            return PostprocessOutcome(
-                success=False, error=f"commit_changes failed: {e}"
+            import subprocess
+            subprocess.run(
+                ["git", "checkout", result.branch_name],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
             )
-
-        if commit is None:
-            try:
-                self._tracker.add_comment(
-                    story.key,
-                    "Pipeline ran but the coding agent made no changes.",
-                )
-            except Exception:
-                log.exception("Failed to comment on no-changes outcome")
-            self._emit(
-                "on_failure",
-                story=story,
-                error="Agent made no changes to commit",
+        except Exception:
+            log.warning(
+                f"Could not checkout {result.branch_name}, "
+                f"continuing with changed_files from current HEAD"
             )
-            return PostprocessOutcome(
-                success=False, error="Agent made no changes to commit"
-            )
-
-        self._emit("after_commit", story=story, commit=commit)
-
-        try:
-            self._hosting.push_branch(repo_path, result.branch_name)
-        except Exception as e:
-            self._emit("on_failure", story=story, error=e)
-            return PostprocessOutcome(
-                success=False, error=f"push_branch failed: {e}"
-            )
-
-        self._emit(
-            "after_push", story=story, branch_name=result.branch_name
-        )
 
         try:
             changed_files = self._hosting.get_changed_files(
@@ -158,6 +117,28 @@ class HostingTrackerPostprocessor(Postprocessor):
             story_url = self._tracker.get_story_url(story.key)
         except Exception:
             story_url = ""
+
+        # Build a synthetic CommitInfo for the PR description from
+        # whatever the worker committed
+        try:
+            import subprocess
+            sha_result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_path, capture_output=True, text=True,
+            )
+            sha = sha_result.stdout.strip() if sha_result.returncode == 0 else "unknown"
+            short_sha = sha[:7]
+        except Exception:
+            sha, short_sha = "unknown", "unknown"
+
+        commit = CommitInfo(
+            sha=sha,
+            short_sha=short_sha,
+            message=f"feat({story.key}): {story.title}",
+            files_changed=len(changed_files),
+            insertions=sum(f.added for f in changed_files),
+            deletions=sum(f.removed for f in changed_files),
+        )
 
         pr_description = build_pr_description(
             story=story,

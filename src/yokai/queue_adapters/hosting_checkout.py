@@ -17,16 +17,16 @@ from pathlib import Path
 from yokai.core.branch_naming import render_branch_name
 from yokai.core.interfaces import RepoHosting
 from yokai.core.models import Branch
-from yokai.queue.agent import CheckoutInfo, RepoCheckout
+from yokai.queue.agent import CheckoutInfo, CommitPushResult, RepoCheckout
 from yokai.queue.models import Job
 
 
 class HostingRepoCheckout(RepoCheckout):
     def __init__(
-        self,
-        hosting: RepoHosting,
-        workspace_dir: Path,
-        branch_pattern: str = "feature/{issue_key}-ai-{timestamp}",
+            self,
+            hosting: RepoHosting,
+            workspace_dir: Path,
+            branch_pattern: str = "feature/{issue_key}-ai-{timestamp}",
     ) -> None:
         self._hosting = hosting
         self._workspace_dir = Path(workspace_dir).expanduser()
@@ -49,8 +49,27 @@ class HostingRepoCheckout(RepoCheckout):
             base_branch=repo.default_branch,
         )
 
+    def commit_and_push(
+            self,
+            checkout_info: CheckoutInfo,
+            message: str,
+    ) -> CommitPushResult | None:
+        repo_path = checkout_info.repo_path
+        branch_name = checkout_info.branch_name
+
+        commit = self._hosting.commit_changes(repo_path, message)
+        if commit is None:
+            return None
+
+        self._hosting.push_branch(repo_path, branch_name)
+        return CommitPushResult(
+            commit_sha=commit.sha,
+            short_sha=commit.short_sha,
+            branch_name=branch_name,
+            files_changed=commit.files_changed,
+            insertions=commit.insertions,
+            deletions=commit.deletions,
+        )
+
     def cleanup(self, job: Job) -> None:
-        # The legacy Pipeline does not clean up either: workspaces are
-        # reused across runs and only refreshed on next clone_or_update.
-        # No-op here keeps behaviour parity.
         return

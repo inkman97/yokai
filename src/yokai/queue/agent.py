@@ -45,10 +45,10 @@ class AgentRunner(ABC):
 
     @abstractmethod
     def run(
-        self,
-        job: Job,
-        repo_path: Path,
-        timeout_seconds: float,
+            self,
+            job: Job,
+            repo_path: Path,
+            timeout_seconds: float,
     ) -> AgentExecution:
         """Invoke the agent on repo_path, blocking until done or timeout.
 
@@ -74,3 +74,30 @@ class RepoCheckout(ABC):
     def cleanup(self, job: Job) -> None:
         """Optional post-job cleanup. Worker calls this regardless of
         agent outcome. Default implementation may be a no-op."""
+
+    def commit_and_push(
+            self,
+            checkout_info: CheckoutInfo,
+            message: str,
+    ) -> CommitPushResult | None:
+        """Commit staged changes and push to origin.
+
+        Returns CommitPushResult on success, None if there were no
+        changes to commit. Implementations may override this; the
+        default raises NotImplementedError.
+        """
+        raise NotImplementedError(
+            "This checkout implementation does not support commit_and_push"
+        )
+
+
+@dataclass
+class CommitPushResult:
+    """Result of a commit + push operation."""
+
+    commit_sha: str
+    short_sha: str
+    branch_name: str
+    files_changed: int = 0
+    insertions: int = 0
+    deletions: int = 0
