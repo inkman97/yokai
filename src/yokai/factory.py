@@ -91,6 +91,7 @@ def _build_jira_dc(config: FrameworkConfig) -> IssueTracker:
             token=s.token,
             trigger_label=s.trigger_label,
             processing_label=s.processing_label,
+            done_label=s.done_label,
             status=s.status,
         )
     )
@@ -119,6 +120,7 @@ def _build_jira_cloud(config: FrameworkConfig) -> IssueTracker:
             token=s.token,
             trigger_label=s.trigger_label,
             processing_label=s.processing_label,
+            done_label=s.done_label,
             status=s.status,
         )
     )

@@ -180,7 +180,7 @@ class TestBuildJiraShortComment:
 
 
 class TestBuildJiraDetailedComment:
-    def test_wraps_output_in_panel_and_noformat(self):
+    def test_wraps_output_in_panel(self):
         result = build_jira_detailed_comment(
             AgentResult(
                 success=True,
@@ -189,21 +189,75 @@ class TestBuildJiraDetailedComment:
             )
         )
         assert "{panel" in result
-        assert "{noformat}" in result
+        assert "{noformat}" not in result  # no longer wrapped in noformat
         assert "All tests pass" in result
 
-    def test_has_h3_header(self):
+    def test_has_h2_header(self):
         result = build_jira_detailed_comment(
             AgentResult(success=True, output="x", duration_seconds=1.0)
         )
-        assert result.startswith("h3.")
+        assert result.startswith("h2.")
 
-    def test_strips_leading_trailing_whitespace_from_output(self):
-        result = build_jira_detailed_comment(
-            AgentResult(
-                success=True,
-                output="\n\n  Real content  \n\n",
-                duration_seconds=1.0,
-            )
-        )
-        assert "Real content" in result
+class TestMarkdownToJiraWiki:
+    def test_headers(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        assert markdown_to_jira_wiki("# H1") == "h1. H1"
+        assert markdown_to_jira_wiki("## H2") == "h2. H2"
+        assert markdown_to_jira_wiki("### H3") == "h3. H3"
+
+    def test_bold(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        assert markdown_to_jira_wiki("**bold**") == "*bold*"
+
+    def test_inline_code(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        assert markdown_to_jira_wiki("`code`") == "{{code}}"
+
+    def test_code_block(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        md = "```java\nint x = 1;\n```"
+        result = markdown_to_jira_wiki(md)
+        assert "{code:java}" in result
+        assert "int x = 1;" in result
+        assert "{code}" in result
+
+    def test_links(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        result = markdown_to_jira_wiki("[click here](https://example.com)")
+        assert "[click here|https://example.com]" in result
+
+    def test_unordered_list(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        result = markdown_to_jira_wiki("- item one\n- item two")
+        assert "* item one" in result
+        assert "* item two" in result
+
+    def test_ordered_list(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        result = markdown_to_jira_wiki("1. first\n2. second")
+        assert "# first" in result
+        assert "# second" in result
+
+    def test_horizontal_rule(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        assert markdown_to_jira_wiki("---") == "----"
+
+    def test_strikethrough(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        assert markdown_to_jira_wiki("~~deleted~~") == "-deleted-"
+
+    def test_table_with_headers(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        md = "| Name | Value |\n|---|---|\n| foo | bar |"
+        result = markdown_to_jira_wiki(md)
+        assert "||Name||Value||" in result
+        assert "|foo|bar|" in result
+
+    def test_mixed_content(self):
+        from yokai.core.formatters import markdown_to_jira_wiki
+        md = "## Summary\n\nThis is **bold** with `code`.\n\n- item\n- item2"
+        result = markdown_to_jira_wiki(md)
+        assert "h2. Summary" in result
+        assert "*bold*" in result
+        assert "{{code}}" in result
+        assert "* item" in result

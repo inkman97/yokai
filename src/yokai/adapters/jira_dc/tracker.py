@@ -28,6 +28,7 @@ class JiraDataCenterSettings:
     token: str
     trigger_label: str = "ai-pipeline"
     processing_label: str = "ai-processing"
+    done_label: str = "ai-done"
     status: str = "Backlog"
     request_timeout: int = 15
 
@@ -106,6 +107,23 @@ class JiraDataCenterTracker(IssueTracker):
             raise IssueTrackerError(
                 f"Failed to add label {label} to {story_key}: {e}"
             ) from e
+    def _remove_label(self, story_key: str, label: str) -> None:
+        s = self._settings
+        url = f"{s.base_url}/rest/api/2/issue/{story_key}"
+        payload = {"update": {"labels": [{"remove": label}]}}
+        try:
+            response = self._session.put(
+                url, json=payload, timeout=s.request_timeout
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            raise IssueTrackerError(
+                f"Failed to remove label {label} from {story_key}: {e}"
+            ) from e
+
+    def mark_done(self, story_key: str) -> None:
+        self._remove_label(story_key, self._settings.processing_label)
+        self._add_label(story_key, self._settings.done_label)
 
     def _issue_to_story(self, issue: dict[str, Any]) -> Story:
         fields = issue.get("fields", {}) or {}

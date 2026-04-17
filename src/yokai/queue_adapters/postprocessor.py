@@ -194,4 +194,9 @@ class HostingTrackerPostprocessor(Postprocessor):
             log.exception(f"Failed to add detailed comment on {story.key}")
 
         self._emit("on_success", story=story, pull_request=pr)
+        # Mark story as done: remove ai-processing, add ai-done
+        try:
+            self._tracker.mark_done(story.key)
+        except Exception:
+            log.exception(f"Failed to mark {story.key} as done (non-fatal)")
         return PostprocessOutcome(success=True, pr_url=pr.url)

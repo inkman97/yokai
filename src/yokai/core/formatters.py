@@ -107,16 +107,134 @@ def build_jira_short_comment(
     return "\n".join(lines)
 
 
+def markdown_to_jira_wiki(text: str) -> str:
+    """Convert Markdown output (from Claude Code) to Jira wiki markup.
+
+    Handles the most common constructs that appear in agent summaries:
+    headers, bold, inline code, code blocks, and tables. Does not
+    attempt to be a full Markdown parser - just enough for structured
+    agent output to render correctly in Jira Data Center.
+    """
+    import re
+
+    lines = text.split("\n")
+    result: list[str] = []
+    in_code_block = False
+    code_block_lines: list[str] = []
+
+    for line in lines:
+        # Fenced code blocks: ```lang ... ```
+        if line.strip().startswith("```"):
+            if in_code_block:
+                # Closing fence
+                result.append("{code}")
+                in_code_block = False
+            else:
+                # Opening fence - extract optional language
+                lang = line.strip()[3:].strip()
+                if lang:
+                    result.append(f"{{code:{lang}}}")
+                else:
+                    result.append("{code}")
+                in_code_block = True
+            continue
+
+        if in_code_block:
+            result.append(line)
+            continue
+
+        # Headers: # ## ### #### -> h1. h2. h3. h4.
+        header_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+        if header_match:
+            level = len(header_match.group(1))
+            content = header_match.group(2).strip()
+            # Convert inline formatting in headers too
+            content = _md_inline_to_jira(content)
+            result.append(f"h{level}. {content}")
+            continue
+
+        # Markdown table separator: |---|---|  -> skip entirely
+        if re.match(r"^\|[\s\-:|]+\|$", line.strip()):
+            continue
+
+        # Markdown table rows
+        if "|" in line and line.strip().startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            cells = [_md_inline_to_jira(c) for c in cells]
+            # Is this a header row? (no previous table row)
+            is_header = len(result) == 0 or not result[-1].startswith("|")
+            if is_header:
+                result.append("||" + "||".join(cells) + "||")
+            else:
+                result.append("|" + "|".join(cells) + "|")
+            continue
+
+        # Horizontal rule: --- or *** or ___
+        if re.match(r"^[\-\*_]{3,}\s*$", line.strip()):
+            result.append("----")
+            continue
+
+        # Unordered list items: - item or * item -> * item (Jira uses *)
+        list_match = re.match(r"^(\s*)[-*]\s+(.+)$", line)
+        if list_match:
+            indent = len(list_match.group(1))
+            depth = (indent // 2) + 1
+            content = _md_inline_to_jira(list_match.group(2))
+            result.append("*" * depth + " " + content)
+            continue
+
+        # Ordered list items: 1. item -> # item
+        ol_match = re.match(r"^(\s*)\d+\.\s+(.+)$", line)
+        if ol_match:
+            indent = len(ol_match.group(1))
+            depth = (indent // 2) + 1
+            content = _md_inline_to_jira(ol_match.group(2))
+            result.append("#" * depth + " " + content)
+            continue
+
+        # Regular line: convert inline formatting
+        result.append(_md_inline_to_jira(line))
+
+    return "\n".join(result)
+
+
+def _md_inline_to_jira(text: str) -> str:
+    """Convert inline Markdown formatting to Jira wiki markup."""
+    import re
+
+    # Inline code: `code` -> {{code}}
+    # Do this first before bold/italic to avoid conflicts
+    text = re.sub(r"`([^`]+)`", r"{{\1}}", text)
+
+    # Bold+italic: ***text*** or ___text___ -> *_text_*  (Jira)
+    text = re.sub(r"\*{3}(.+?)\*{3}", r"*_\1_*", text)
+    text = re.sub(r"_{3}(.+?)_{3}", r"*_\1_*", text)
+
+    # Bold: **text** -> *text*
+    text = re.sub(r"\*{2}(.+?)\*{2}", r"*\1*", text)
+
+    # Strikethrough: ~~text~~ -> -text-
+    text = re.sub(r"~~(.+?)~~", r"-\1-", text)
+
+    # Links: [text](url) -> [text|url]
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"[\1|\2]", text)
+
+    return text
+
+
 def build_jira_detailed_comment(agent_result: AgentResult) -> str:
+    output = agent_result.output.strip()
+
+    # Convert Markdown to Jira wiki markup
+    converted = markdown_to_jira_wiki(output)
+
     lines = [
-        "h3. Agent execution details",
+        "h2. Agent execution details",
         "",
         "{panel:title=Coding agent output|borderStyle=solid|borderColor=#ccc"
         "|titleBGColor=#f4f5f7|bgColor=#ffffff}",
         "",
-        "{noformat}",
-        agent_result.output.strip(),
-        "{noformat}",
+        converted,
         "",
         "{panel}",
     ]

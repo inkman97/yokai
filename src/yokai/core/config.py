@@ -32,6 +32,7 @@ class IssueTrackerConfig:
     status: str
     account: str
     token: str
+    done_label: str = "ai-done"
 
 
 @dataclass
@@ -182,6 +183,7 @@ def _parse_issue_tracker(data: dict) -> IssueTrackerConfig:
         status=data.get("status", "Backlog"),
         account=_require(data, "account", "issue_tracker"),
         token=_require(data, "token", "issue_tracker"),
+        done_label=data.get("done_label", "ai-done"),
     )
 
 

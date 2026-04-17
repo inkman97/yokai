@@ -45,6 +45,12 @@ class IssueTracker(ABC):
     def get_story_url(self, story_key: str) -> str:
         """Return the human-readable URL for a story."""
 
+    def mark_done(self, story_key: str) -> None:
+        """Mark a story as completed by the AI pipeline.
+
+        Default is a no-op so existing adapters don't break.
+        Override to add/remove labels as appropriate.
+        """
 
 class RepoHosting(ABC):
     """A system that hosts git repositories and pull requests."""
