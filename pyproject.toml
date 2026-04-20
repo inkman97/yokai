@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yokai-cli"
-version = "0.2.0a4"
+version = "0.2.0a5"
 description = "From issue tracker stories to pull requests via coding agents. A spirit that works while you sleep."
 readme = "README.md"
 requires-python = ">=3.10"
