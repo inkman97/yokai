@@ -52,6 +52,7 @@ class JiraDataCenterTracker(IssueTracker):
             f'AND status = "{s.status}" '
             f'AND labels = "{s.trigger_label}" '
             f'AND labels != "{s.processing_label}"'
+            f'AND labels != "{s.done_label}"'
         )
         url = f"{s.base_url}/rest/api/2/search"
         params = {
