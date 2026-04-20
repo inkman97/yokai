@@ -72,6 +72,14 @@ unstable and may change.
 - Token redaction in all log output, including credentials embedded in
   Bitbucket Cloud clone URLs.
 - Idempotent commands and safe failure recovery.
+- **PR review rework loop** (async mode): when a reviewer leaves
+  comments on a yokai-generated PR, add the `ai-rework` label on
+  Jira and yokai will read the review comments, fix the code, and
+  push to the same branch — the PR updates automatically.
+- **Markdown to Jira wiki markup converter**: agent output (written
+  in Markdown by Claude) is automatically converted to Jira Data
+  Center wiki markup so comments render with proper headers, tables,
+  bold, and code blocks.
 
 ## Deployment modes
 
@@ -192,6 +200,48 @@ opens a pull request, and posts two comments back on the Jira story.
 ```bash
 yokai status --config config.yaml        # legacy SQLite execution store
 yokai queue-status --config config.yaml  # async queue state (jobs, workers, dead-letters)
+```
+
+## PR review rework loop
+
+When a reviewer leaves comments on a yokai-generated pull request,
+yokai can automatically fix the code based on the review feedback.
+
+### How it works
+
+1. yokai processes a story and opens a PR (the normal flow).
+2. A reviewer comments on the PR in Bitbucket.
+3. Someone adds the label `ai-rework` to the Jira story.
+4. The coordinator picks it up, finds the open PR on Bitbucket by
+   matching the story key in the branch name, and reads all review
+   comments.
+5. The worker checks out the **existing branch** (no new branch),
+   runs Claude Code with a rework-specific prompt that includes
+   every review comment with file path and line number, then commits
+   and pushes to the same branch.
+6. The PR updates automatically with the new commit.
+7. yokai removes `ai-rework` and restores `ai-done` on Jira.
+
+The rework loop can be repeated: if the reviewer leaves more comments,
+add `ai-rework` again.
+
+### Label flow
+
+```
+ai-pipeline → ai-processing → ai-done
+                                  ↓  (reviewer adds ai-rework)
+                            ai-rework → ai-processing → ai-done
+                                                            ↓  (repeat if needed)
+                                                      ai-rework → ...
+```
+
+### Configuration
+
+The rework label is configurable (default `ai-rework`):
+
+```yaml
+issue_tracker:
+  rework_label: ai-rework
 ```
 
 ## Architecture
@@ -328,12 +378,13 @@ Run the test suite:
 pytest
 ```
 
-The test suite (~600 tests) has unit tests with HTTP mocking for the
+The test suite (~680 tests) has unit tests with HTTP mocking for the
 Jira and Bitbucket adapters, parallelism tests using fake in-memory
 adapters, an integration test that exercises real git operations
-against a local bare repository (no network needed), and a full
+against a local bare repository (no network needed), a full
 contract test suite for the three queue backends (in-memory, SQLite,
-Redis via `fakeredis`).
+Redis via `fakeredis`), and end-to-end tests for the PR review
+rework loop.
 
 ## Contributing
 
