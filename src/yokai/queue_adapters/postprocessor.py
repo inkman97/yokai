@@ -68,6 +68,8 @@ class HostingTrackerPostprocessor(Postprocessor):
             )
 
         story = job_to_story(job)
+        is_rework = job.payload.get("job_type") == "rework"
+
         try:
             repo = self._hosting.resolve_repo(job.repo_slug)
         except Exception as e:
@@ -75,6 +77,9 @@ class HostingTrackerPostprocessor(Postprocessor):
             return PostprocessOutcome(
                 success=False, error=f"resolve_repo failed: {e}"
             )
+
+        if is_rework:
+            return self._postprocess_rework(job, result, story)
 
         # The Worker already committed and pushed the branch. We only
         # need the repo_path to read changed files for the PR
@@ -200,3 +205,40 @@ class HostingTrackerPostprocessor(Postprocessor):
         except Exception:
             log.exception(f"Failed to mark {story.key} as done (non-fatal)")
         return PostprocessOutcome(success=True, pr_url=pr.url)
+
+    def _postprocess_rework(
+        self,
+        job: Job,
+        result: JobResult,
+        story,
+    ) -> PostprocessOutcome:
+        """Handle post-processing for rework jobs.
+
+        No new PR is opened — the existing PR is already updated by
+        the push. We just comment on Jira and update labels.
+        """
+        synthetic = AgentResult(
+            success=True,
+            output=result.agent_output,
+            duration_seconds=result.duration_seconds,
+        )
+        rework_comment = build_jira_detailed_comment(synthetic)
+        try:
+            self._tracker.add_comment(
+                story.key,
+                f"h3. Rework completed\n\n{rework_comment}",
+            )
+        except Exception:
+            log.exception(f"Failed to add rework comment on {story.key}")
+
+        self._emit("on_success", story=story, pull_request=None)
+
+        try:
+            self._tracker.mark_rework_done(story.key)
+        except Exception:
+            log.exception(
+                f"Failed to mark {story.key} as rework done (non-fatal)"
+            )
+
+        pr_url = job.payload.get("pr_url", "")
+        return PostprocessOutcome(success=True, pr_url=pr_url)

@@ -4,6 +4,8 @@ Git operations against a real local repo are tested in integration tests.
 Here we test:
 - resolve_repo URL construction (workspace-based, with embedded auth)
 - open_pull_request via mocked HTTP using the v2 schema
+- find_pull_requests via mocked HTTP
+- get_pr_comments via mocked HTTP
 - _parse_show_stat as a pure function
 - _redact_args helper to ensure credentials never leak into logs
 """
@@ -168,6 +170,234 @@ class TestOpenPullRequest:
         )
         body = responses.calls[0].request.body
         assert b'"close_source_branch": false' in body
+
+
+class TestFindPullRequests:
+    @responses.activate
+    def test_returns_matching_prs(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests",
+            json={
+                "values": [
+                    {
+                        "id": 10,
+                        "title": "AI PR",
+                        "description": "auto",
+                        "source": {"branch": {"name": "feature/NOVA-1-ai"}},
+                        "destination": {"branch": {"name": "main"}},
+                        "links": {"html": {"href": "https://bb.example/pr/10"}},
+                    },
+                    {
+                        "id": 11,
+                        "title": "Other PR",
+                        "description": "",
+                        "source": {"branch": {"name": "feature/manual"}},
+                        "destination": {"branch": {"name": "main"}},
+                        "links": {"html": {"href": "https://bb.example/pr/11"}},
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        prs = hosting.find_pull_requests(loc, "feature/NOVA-1-ai")
+
+        assert len(prs) == 1
+        assert prs[0].id == "10"
+        assert prs[0].source_branch == "feature/NOVA-1-ai"
+        assert prs[0].target_branch == "main"
+
+    @responses.activate
+    def test_returns_all_when_branch_is_empty(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests",
+            json={
+                "values": [
+                    {
+                        "id": 10,
+                        "title": "PR 1",
+                        "source": {"branch": {"name": "branch-a"}},
+                        "destination": {"branch": {"name": "main"}},
+                        "links": {"html": {"href": ""}},
+                    },
+                    {
+                        "id": 11,
+                        "title": "PR 2",
+                        "source": {"branch": {"name": "branch-b"}},
+                        "destination": {"branch": {"name": "main"}},
+                        "links": {"html": {"href": ""}},
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        prs = hosting.find_pull_requests(loc, "")
+
+        assert len(prs) == 2
+
+    @responses.activate
+    def test_returns_empty_on_http_error(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests",
+            status=500,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        prs = hosting.find_pull_requests(loc, "feature/x")
+
+        assert prs == []
+
+
+class TestGetPrComments:
+    @responses.activate
+    def test_returns_comments_with_inline_info(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments",
+            json={
+                "values": [
+                    {
+                        "id": 100,
+                        "user": {"display_name": "Francesco"},
+                        "content": {"raw": "Fix this method"},
+                        "inline": {"path": "src/Main.java", "to": 42},
+                        "created_on": "2026-04-20T10:00:00Z",
+                    },
+                    {
+                        "id": 101,
+                        "user": {"display_name": "Reviewer"},
+                        "content": {"raw": "Looks good otherwise"},
+                        "created_on": "2026-04-20T11:00:00Z",
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        comments = hosting.get_pr_comments(loc, "10")
+
+        assert len(comments) == 2
+        assert comments[0].author == "Francesco"
+        assert comments[0].text == "Fix this method"
+        assert comments[0].file_path == "src/Main.java"
+        assert comments[0].line == 42
+        assert comments[1].file_path is None
+        assert comments[1].line is None
+
+    @responses.activate
+    def test_skips_yokai_bot_comments(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments",
+            json={
+                "values": [
+                    {
+                        "id": 100,
+                        "user": {"display_name": "yokai-bot"},
+                        "content": {"raw": "Generated by yokai"},
+                    },
+                    {
+                        "id": 101,
+                        "user": {"display_name": "Human Reviewer"},
+                        "content": {"raw": "Please fix this"},
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        comments = hosting.get_pr_comments(loc, "10")
+
+        assert len(comments) == 1
+        assert comments[0].author == "Human Reviewer"
+
+    @responses.activate
+    def test_skips_empty_comments(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments",
+            json={
+                "values": [
+                    {
+                        "id": 100,
+                        "user": {"display_name": "Someone"},
+                        "content": {"raw": ""},
+                    },
+                    {
+                        "id": 101,
+                        "user": {"display_name": "Someone"},
+                        "content": {"raw": "Real comment"},
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        comments = hosting.get_pr_comments(loc, "10")
+
+        assert len(comments) == 1
+        assert comments[0].text == "Real comment"
+
+    @responses.activate
+    def test_handles_pagination(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments",
+            json={
+                "values": [
+                    {
+                        "id": 100,
+                        "user": {"display_name": "Page1"},
+                        "content": {"raw": "Comment page 1"},
+                    },
+                ],
+                "next": "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments?page=2",
+            },
+            status=200,
+        )
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments?page=2",
+            json={
+                "values": [
+                    {
+                        "id": 101,
+                        "user": {"display_name": "Page2"},
+                        "content": {"raw": "Comment page 2"},
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        comments = hosting.get_pr_comments(loc, "10")
+
+        assert len(comments) == 2
+        assert comments[0].author == "Page1"
+        assert comments[1].author == "Page2"
+
+    @responses.activate
+    def test_returns_empty_on_http_error(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments",
+            status=500,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        comments = hosting.get_pr_comments(loc, "10")
+
+        assert comments == []
 
 
 class TestParseShowStat:

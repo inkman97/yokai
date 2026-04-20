@@ -33,6 +33,7 @@ class IssueTrackerConfig:
     account: str
     token: str
     done_label: str = "ai-done"
+    rework_label: str = "ai-rework"
 
 
 @dataclass
@@ -184,6 +185,7 @@ def _parse_issue_tracker(data: dict) -> IssueTrackerConfig:
         account=_require(data, "account", "issue_tracker"),
         token=_require(data, "token", "issue_tracker"),
         done_label=data.get("done_label", "ai-done"),
+        rework_label=data.get("rework_label", "ai-rework"),
     )
 
 

@@ -41,6 +41,7 @@ from yokai.core.models import (
     Branch,
     CommitInfo,
     FileChange,
+    PRComment,
     PullRequest,
     RepoLocation,
 )
@@ -113,7 +114,7 @@ class BitbucketCloudHosting(RepoHosting):
         self._run_git(["checkout", "-b", branch.name], cwd=repo_path)
 
     def commit_changes(
-        self, repo_path: Path, message: str
+            self, repo_path: Path, message: str
     ) -> CommitInfo | None:
         self._run_git(["add", "-A"], cwd=repo_path)
         status = self._run_git(["status", "--porcelain"], cwd=repo_path)
@@ -145,7 +146,7 @@ class BitbucketCloudHosting(RepoHosting):
         )
 
     def get_changed_files(
-        self, repo_path: Path, base_branch: str
+            self, repo_path: Path, base_branch: str
     ) -> list[FileChange]:
         try:
             output = self._run_git(
@@ -170,12 +171,12 @@ class BitbucketCloudHosting(RepoHosting):
         return result
 
     def open_pull_request(
-        self,
-        repo: RepoLocation,
-        source_branch: str,
-        target_branch: str,
-        title: str,
-        description: str,
+            self,
+            repo: RepoLocation,
+            source_branch: str,
+            target_branch: str,
+            title: str,
+            description: str,
     ) -> PullRequest:
         s = self._settings
         url = (
@@ -220,11 +221,119 @@ class BitbucketCloudHosting(RepoHosting):
             description=description,
         )
 
+    def find_pull_requests(
+            self, repo: RepoLocation, branch_name: str
+    ) -> list[PullRequest]:
+        s = self._settings
+        url = (
+            f"{s.base_url}/repositories/{s.workspace}/{repo.slug}"
+            f"/pullrequests"
+        )
+        params = {"state": "OPEN"}
+        try:
+            response = requests.get(
+                url,
+                auth=HTTPBasicAuth(s.account, s.token),
+                headers={"Accept": "application/json"},
+                params=params,
+                timeout=s.request_timeout,
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            log.warning(f"Failed to find pull requests: {e}")
+            return []
+
+        prs = []
+        for pr_data in response.json().get("values", []):
+            source = (
+                pr_data.get("source", {})
+                .get("branch", {})
+                .get("name", "")
+            )
+            if branch_name and source != branch_name:
+                continue
+            destination = (
+                pr_data.get("destination", {})
+                .get("branch", {})
+                .get("name", "")
+            )
+            pr_url = (
+                pr_data.get("links", {})
+                .get("html", {})
+                .get("href", "")
+            )
+            prs.append(PullRequest(
+                id=str(pr_data.get("id", "")),
+                url=pr_url,
+                title=pr_data.get("title", ""),
+                source_branch=source,
+                target_branch=destination,
+                description=pr_data.get("description", ""),
+            ))
+        return prs
+
+    def get_pr_comments(
+            self, repo: RepoLocation, pr_id: str
+    ) -> list[PRComment]:
+        s = self._settings
+        url = (
+            f"{s.base_url}/repositories/{s.workspace}/{repo.slug}"
+            f"/pullrequests/{pr_id}/comments"
+        )
+        comments: list[PRComment] = []
+        page_url = url
+        while page_url:
+            try:
+                response = requests.get(
+                    page_url,
+                    auth=HTTPBasicAuth(s.account, s.token),
+                    headers={"Accept": "application/json"},
+                    timeout=s.request_timeout,
+                )
+                response.raise_for_status()
+            except requests.RequestException as e:
+                log.warning(f"Failed to get PR comments for PR {pr_id}: {e}")
+                break
+
+            body = response.json()
+            for comment_data in body.get("values", []):
+                author = (
+                    comment_data.get("user", {})
+                    .get("display_name", "unknown")
+                )
+                text = comment_data.get("content", {}).get("raw", "")
+                if not text or "yokai" in author.lower():
+                    continue
+                inline = comment_data.get("inline", {})
+                file_path = inline.get("path") if inline else None
+                line = inline.get("to") if inline else None
+                comments.append(PRComment(
+                    id=str(comment_data.get("id", "")),
+                    author=author,
+                    text=text,
+                    file_path=file_path,
+                    line=line,
+                    created_at=comment_data.get("created_on", ""),
+                ))
+
+            page_url = body.get("next")
+
+        return comments
+
+    def checkout_existing_branch(
+            self, repo_path: Path, branch_name: str
+    ) -> None:
+        self._run_git(["fetch", "origin", branch_name], cwd=repo_path)
+        self._run_git(["checkout", branch_name], cwd=repo_path)
+        self._run_git(
+            ["pull", "origin", branch_name], cwd=repo_path, check=False
+        )
+
     def _run_git(
-        self,
-        args: list[str],
-        cwd: Path | None = None,
-        check: bool = True,
+            self,
+            args: list[str],
+            cwd: Path | None = None,
+            check: bool = True,
     ) -> str:
         cmd = ["git"] + args
         log.info(f"git {' '.join(_redact_args(args))}")

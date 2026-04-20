@@ -46,6 +46,10 @@ class IssueSource(ABC):
         once the story is successfully enqueued.
         """
 
+    def fetch_rework(self) -> list[StorySnapshot]:
+        """Return stories that need rework (have the rework label)."""
+        return []
+
     @abstractmethod
     def mark_accepted(self, story_key: str) -> None:
         """Signal to the source that a story has been accepted into
@@ -55,6 +59,9 @@ class IssueSource(ABC):
         This is called only after enqueue succeeds. If enqueue raises
         DuplicateJobError, this is NOT called (the previous accept
         already happened or another instance won the race)."""
+
+    def mark_rework_accepted(self, story_key: str) -> None:
+        """Signal that a rework story has been accepted."""
 
     @abstractmethod
     def mark_rejected(self, story_key: str, reason: str) -> None:

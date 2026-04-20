@@ -16,6 +16,7 @@ from yokai.core.models import (
     Branch,
     CommitInfo,
     FileChange,
+    PRComment,
     PullRequest,
     RepoLocation,
     Story,
@@ -46,11 +47,18 @@ class IssueTracker(ABC):
         """Return the human-readable URL for a story."""
 
     def mark_done(self, story_key: str) -> None:
-        """Mark a story as completed by the AI pipeline.
+        """Mark a story as completed by the AI pipeline."""
 
-        Default is a no-op so existing adapters don't break.
-        Override to add/remove labels as appropriate.
-        """
+    def search_rework_stories(self) -> list[Story]:
+        """Return stories that need rework (have the rework label)."""
+        return []
+
+    def mark_rework_in_progress(self, story_key: str) -> None:
+        """Mark a rework story as being processed."""
+
+    def mark_rework_done(self, story_key: str) -> None:
+        """Mark a rework as completed: remove rework label, restore done."""
+
 
 class RepoHosting(ABC):
     """A system that hosts git repositories and pull requests."""
@@ -99,6 +107,24 @@ class RepoHosting(ABC):
         description: str,
     ) -> PullRequest:
         """Open a pull request and return its identifiers."""
+
+    def find_pull_requests(
+        self, repo: RepoLocation, branch_name: str
+    ) -> list[PullRequest]:
+        """Find open pull requests for a given source branch."""
+        return []
+
+    def get_pr_comments(
+        self, repo: RepoLocation, pr_id: str
+    ) -> list[PRComment]:
+        """Get review comments on a pull request."""
+        return []
+
+    def checkout_existing_branch(
+        self, repo_path: Path, branch_name: str
+    ) -> None:
+        """Checkout an existing remote branch."""
+        raise NotImplementedError
 
 
 class CodingAgent(ABC):

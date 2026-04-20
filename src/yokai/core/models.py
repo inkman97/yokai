@@ -96,6 +96,20 @@ class PullRequest:
 
 
 @dataclass
+class PRComment:
+    """A review comment on a pull request."""
+
+    id: str
+    author: str
+    text: str
+    file_path: str | None = None
+    line: int | None = None
+    severity: str = ""
+    state: str = ""
+    created_at: str = ""
+
+
+@dataclass
 class AgentResult:
     """Outcome of running a coding agent on a repository."""
 

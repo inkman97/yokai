@@ -154,11 +154,15 @@ def build_coordinator(config: FrameworkConfig) -> Coordinator:
         raise ConfigurationError("queue section missing")
 
     backend = _build_backend(config)
-    tracker, _hosting, _agent, router = _build_tracker_and_hosting_and_agent(
+    tracker, hosting, _agent, router = _build_tracker_and_hosting_and_agent(
         config
     )
 
     source = TrackerIssueSource(tracker)
+
+    from yokai.queue_adapters.rework_resolver import HostingReworkResolver
+    rework_resolver = HostingReworkResolver(hosting)
+
     cc = config.queue.coordinator
     settings = CoordinatorSettings(
         poll_interval_seconds=cc.poll_interval_seconds,
@@ -172,6 +176,7 @@ def build_coordinator(config: FrameworkConfig) -> Coordinator:
         queue=backend,
         lock=backend,
         settings=settings,
+        rework_resolver=rework_resolver,
     )
 
 

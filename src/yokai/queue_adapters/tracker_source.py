@@ -36,8 +36,15 @@ class TrackerIssueSource(IssueSource):
         stories = self._tracker.search_pending_stories()
         return [story_to_snapshot(s) for s in stories]
 
+    def fetch_rework(self) -> list[StorySnapshot]:
+        stories = self._tracker.search_rework_stories()
+        return [story_to_snapshot(s) for s in stories]
+
     def mark_accepted(self, story_key: str) -> None:
         self._tracker.mark_in_progress(story_key)
+
+    def mark_rework_accepted(self, story_key: str) -> None:
+        self._tracker.mark_rework_in_progress(story_key)
 
     def mark_rejected(self, story_key: str, reason: str) -> None:
         self._tracker.mark_failed(story_key, reason)

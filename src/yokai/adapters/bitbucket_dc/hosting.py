@@ -39,6 +39,7 @@ from yokai.core.models import (
     Branch,
     CommitInfo,
     FileChange,
+    PRComment,
     PullRequest,
     RepoLocation,
 )
@@ -232,6 +233,124 @@ class BitbucketDataCenterHosting(RepoHosting):
             source_branch=source_branch,
             target_branch=target_branch,
             description=description,
+        )
+
+    def find_pull_requests(
+        self, repo: RepoLocation, branch_name: str
+    ) -> list[PullRequest]:
+        s = self._settings
+        project_upper = s.namespace.upper()
+        url = (
+            f"{s.base_url}/rest/api/1.0/projects/{project_upper}"
+            f"/repos/{repo.slug}/pull-requests"
+        )
+        headers = {
+            "Authorization": f"Bearer {s.token}",
+            "Accept": "application/json",
+        }
+        params = {"state": "OPEN", "limit": 100}
+        try:
+            response = requests.get(
+                url, headers=headers, params=params, timeout=s.request_timeout
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            log.warning(f"Failed to find pull requests: {e}")
+            return []
+
+        prs = []
+        for pr_data in response.json().get("values", []):
+            from_ref = pr_data.get("fromRef", {})
+            to_ref = pr_data.get("toRef", {})
+            source = from_ref.get("displayId", "")
+            if branch_name and source != branch_name:
+                continue
+            pr_url = (
+                pr_data.get("links", {})
+                .get("self", [{}])[0]
+                .get("href", "")
+            )
+            prs.append(PullRequest(
+                id=str(pr_data.get("id", "")),
+                url=pr_url,
+                title=pr_data.get("title", ""),
+                source_branch=source,
+                target_branch=to_ref.get("displayId", ""),
+                description=pr_data.get("description", ""),
+            ))
+        return prs
+
+    def get_pr_comments(
+        self, repo: RepoLocation, pr_id: str
+    ) -> list[PRComment]:
+        s = self._settings
+        project_upper = s.namespace.upper()
+        url = (
+            f"{s.base_url}/rest/api/1.0/projects/{project_upper}"
+            f"/repos/{repo.slug}/pull-requests/{pr_id}/activities"
+        )
+        headers = {
+            "Authorization": f"Bearer {s.token}",
+            "Accept": "application/json",
+        }
+        comments: list[PRComment] = []
+        start = 0
+        while True:
+            try:
+                response = requests.get(
+                    url,
+                    headers=headers,
+                    params={"start": start, "limit": 100},
+                    timeout=s.request_timeout,
+                )
+                response.raise_for_status()
+            except requests.RequestException as e:
+                log.warning(f"Failed to get PR comments for PR {pr_id}: {e}")
+                break
+
+            body = response.json()
+            for activity in body.get("values", []):
+                if activity.get("action") != "COMMENTED":
+                    continue
+                comment = activity.get("comment", {})
+                author = comment.get("author", {}).get("displayName", "unknown")
+                text = comment.get("text", "")
+                if not text or "yokai" in author.lower():
+                    continue
+                anchor = activity.get("commentAnchor", {})
+                file_path = anchor.get("path") if anchor else None
+                line = anchor.get("line") if anchor else None
+                severity = comment.get("severity", "NORMAL")
+                comments.append(PRComment(
+                    id=str(comment.get("id", "")),
+                    author=author,
+                    text=text,
+                    file_path=file_path,
+                    line=line,
+                    created_at=str(comment.get("createdDate", "")),
+                    severity=severity,
+                ))
+
+            if body.get("isLastPage", True):
+                break
+            start = body.get("nextPageStart", start + 100)
+
+        return comments
+
+    def checkout_existing_branch(
+        self, repo_path: Path, branch_name: str
+    ) -> None:
+        self._run_git(
+            self._auth_args() + ["fetch", "origin", branch_name],
+            cwd=repo_path,
+        )
+        self._run_git(
+            ["checkout", branch_name],
+            cwd=repo_path,
+        )
+        self._run_git(
+            self._auth_args() + ["pull", "origin", branch_name],
+            cwd=repo_path,
         )
 
     def _auth_args(self) -> list[str]:

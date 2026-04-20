@@ -35,6 +35,20 @@ class HostingRepoCheckout(RepoCheckout):
     def prepare(self, job: Job) -> CheckoutInfo:
         repo = self._hosting.resolve_repo(job.repo_slug)
         repo_path = self._hosting.clone_or_update(repo, self._workspace_dir)
+
+        if job.payload.get("job_type") == "rework":
+            branch_name = job.payload.get("branch_name", "")
+            if not branch_name:
+                raise RuntimeError(
+                    f"Rework job {job.job_id} has no branch_name in payload"
+                )
+            self._hosting.checkout_existing_branch(repo_path, branch_name)
+            return CheckoutInfo(
+                repo_path=repo_path,
+                branch_name=branch_name,
+                base_branch=repo.default_branch,
+            )
+
         branch_name = render_branch_name(
             self._branch_pattern,
             issue_key=job.story_key,

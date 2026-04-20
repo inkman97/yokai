@@ -29,6 +29,7 @@ class JiraDataCenterSettings:
     trigger_label: str = "ai-pipeline"
     processing_label: str = "ai-processing"
     done_label: str = "ai-done"
+    rework_label: str = "ai-rework"
     status: str = "Backlog"
     request_timeout: int = 15
 
@@ -51,7 +52,7 @@ class JiraDataCenterTracker(IssueTracker):
             f'project = {s.project} '
             f'AND status = "{s.status}" '
             f'AND labels = "{s.trigger_label}" '
-            f'AND labels != "{s.processing_label}"'
+            f'AND labels != "{s.processing_label}" '
             f'AND labels != "{s.done_label}"'
         )
         url = f"{s.base_url}/rest/api/2/search"
@@ -123,6 +124,42 @@ class JiraDataCenterTracker(IssueTracker):
             ) from e
 
     def mark_done(self, story_key: str) -> None:
+        self._remove_label(story_key, self._settings.processing_label)
+        self._add_label(story_key, self._settings.done_label)
+
+    def search_rework_stories(self) -> list[Story]:
+        s = self._settings
+        jql = (
+            f'project = {s.project} '
+            f'AND labels = "{s.rework_label}" '
+            f'AND labels != "{s.processing_label}"'
+        )
+        url = f"{s.base_url}/rest/api/2/search"
+        params = {
+            "jql": jql,
+            "fields": "summary,description,components,labels",
+            "maxResults": 50,
+        }
+        try:
+            response = self._session.get(
+                url, params=params, timeout=s.request_timeout
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            raise IssueTrackerError(
+                f"Jira rework search failed: {e}"
+            ) from e
+
+        issues = response.json().get("issues", [])
+        stories = [self._issue_to_story(issue) for issue in issues]
+        log.info(f"Jira returned {len(stories)} rework stories")
+        return stories
+
+    def mark_rework_in_progress(self, story_key: str) -> None:
+        self._add_label(story_key, self._settings.processing_label)
+
+    def mark_rework_done(self, story_key: str) -> None:
+        self._remove_label(story_key, self._settings.rework_label)
         self._remove_label(story_key, self._settings.processing_label)
         self._add_label(story_key, self._settings.done_label)
 

@@ -21,8 +21,8 @@ from yokai.core.exceptions import (
     AgentTimeoutError,
 )
 from yokai.core.interfaces import CodingAgent
-from yokai.core.models import Story
-from yokai.core.prompts import PromptBuilder, default_prompt_builder
+from yokai.core.models import PRComment, Story
+from yokai.core.prompts import PromptBuilder, default_prompt_builder, rework_prompt_builder
 from yokai.queue.agent import AgentExecution, AgentRunner
 from yokai.queue.models import Job
 
@@ -46,6 +46,23 @@ def job_to_story(job: Job) -> Story:
     )
 
 
+def _deserialize_pr_comments(raw_comments: list[dict]) -> list[PRComment]:
+    """Reconstruct PRComment objects from serialized dicts in the payload."""
+    return [
+        PRComment(
+            id=c.get("id", ""),
+            author=c.get("author", ""),
+            text=c.get("text", ""),
+            file_path=c.get("file_path"),
+            line=c.get("line"),
+            severity=c.get("severity", ""),
+            state=c.get("state", ""),
+            created_at=c.get("created_at", ""),
+        )
+        for c in raw_comments
+    ]
+
+
 class AgentCodingRunner(AgentRunner):
     def __init__(
         self,
@@ -63,7 +80,12 @@ class AgentCodingRunner(AgentRunner):
     ) -> AgentExecution:
         story = job_to_story(job)
         try:
-            prompt = self._prompt_builder(story)
+            if job.payload.get("job_type") == "rework":
+                raw_comments = job.payload.get("pr_comments", [])
+                pr_comments = _deserialize_pr_comments(raw_comments)
+                prompt = rework_prompt_builder(story, pr_comments)
+            else:
+                prompt = self._prompt_builder(story)
         except Exception as e:
             return AgentExecution(
                 success=False,
