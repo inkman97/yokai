@@ -275,6 +275,7 @@ class BitbucketCloudHosting(RepoHosting):
     def get_pr_comments(
             self, repo: RepoLocation, pr_id: str
     ) -> list[PRComment]:
+        """Get unresolved review comments on a PR."""
         s = self._settings
         url = (
             f"{s.base_url}/repositories/{s.workspace}/{repo.slug}"
@@ -297,6 +298,11 @@ class BitbucketCloudHosting(RepoHosting):
 
             body = response.json()
             for comment_data in body.get("values", []):
+                if comment_data.get("deleted", False):
+                    continue
+                resolution = comment_data.get("resolution", {})
+                if resolution and resolution.get("type") == "RESOLVED":
+                    continue
                 author = (
                     comment_data.get("user", {})
                     .get("display_name", "unknown")
@@ -314,6 +320,7 @@ class BitbucketCloudHosting(RepoHosting):
                     file_path=file_path,
                     line=line,
                     created_at=comment_data.get("created_on", ""),
+                    state="OPEN",
                 ))
 
             page_url = body.get("next")

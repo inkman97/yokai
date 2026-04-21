@@ -399,6 +399,64 @@ class TestGetPrComments:
 
         assert comments == []
 
+    @responses.activate
+    def test_skips_resolved_comments(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments",
+            json={
+                "values": [
+                    {
+                        "id": 100,
+                        "user": {"display_name": "Reviewer"},
+                        "content": {"raw": "Already addressed"},
+                        "resolution": {"type": "RESOLVED"},
+                    },
+                    {
+                        "id": 101,
+                        "user": {"display_name": "Reviewer"},
+                        "content": {"raw": "Still needs work"},
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        comments = hosting.get_pr_comments(loc, "10")
+
+        assert len(comments) == 1
+        assert comments[0].text == "Still needs work"
+
+    @responses.activate
+    def test_skips_deleted_comments(self):
+        responses.add(
+            responses.GET,
+            "https://api.bitbucket.org/2.0/repositories/acme-team/my-repo/pullrequests/10/comments",
+            json={
+                "values": [
+                    {
+                        "id": 100,
+                        "user": {"display_name": "Reviewer"},
+                        "content": {"raw": "Deleted comment"},
+                        "deleted": True,
+                    },
+                    {
+                        "id": 101,
+                        "user": {"display_name": "Reviewer"},
+                        "content": {"raw": "Active comment"},
+                    },
+                ],
+            },
+            status=200,
+        )
+        hosting = make_hosting()
+        loc = hosting.resolve_repo("my-repo")
+        comments = hosting.get_pr_comments(loc, "10")
+
+        assert len(comments) == 1
+        assert comments[0].text == "Active comment"
+
 
 class TestParseShowStat:
     def test_parses_typical_stat_line(self):

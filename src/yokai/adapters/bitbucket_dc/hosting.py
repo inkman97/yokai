@@ -120,7 +120,7 @@ class BitbucketDataCenterHosting(RepoHosting):
         self._run_git(["checkout", "-b", branch.name], cwd=repo_path)
 
     def commit_changes(
-        self, repo_path: Path, message: str
+            self, repo_path: Path, message: str
     ) -> CommitInfo | None:
         self._run_git(["add", "-A"], cwd=repo_path)
         status = self._run_git(["status", "--porcelain"], cwd=repo_path)
@@ -150,7 +150,7 @@ class BitbucketDataCenterHosting(RepoHosting):
         self._run_git(["push", "-u", "origin", branch_name], cwd=repo_path)
 
     def get_changed_files(
-        self, repo_path: Path, base_branch: str
+            self, repo_path: Path, base_branch: str
     ) -> list[FileChange]:
         try:
             output = self._run_git(
@@ -175,12 +175,12 @@ class BitbucketDataCenterHosting(RepoHosting):
         return result
 
     def open_pull_request(
-        self,
-        repo: RepoLocation,
-        source_branch: str,
-        target_branch: str,
-        title: str,
-        description: str,
+            self,
+            repo: RepoLocation,
+            source_branch: str,
+            target_branch: str,
+            title: str,
+            description: str,
     ) -> PullRequest:
         s = self._settings
         project_upper = s.namespace.upper()
@@ -236,7 +236,7 @@ class BitbucketDataCenterHosting(RepoHosting):
         )
 
     def find_pull_requests(
-        self, repo: RepoLocation, branch_name: str
+            self, repo: RepoLocation, branch_name: str
     ) -> list[PullRequest]:
         s = self._settings
         project_upper = s.namespace.upper()
@@ -281,19 +281,23 @@ class BitbucketDataCenterHosting(RepoHosting):
         return prs
 
     def get_pr_comments(
-        self, repo: RepoLocation, pr_id: str
+            self, repo: RepoLocation, pr_id: str
     ) -> list[PRComment]:
+        """Get unresolved review comments and open tasks on a PR."""
         s = self._settings
         project_upper = s.namespace.upper()
-        url = (
+        base_pr_url = (
             f"{s.base_url}/rest/api/1.0/projects/{project_upper}"
-            f"/repos/{repo.slug}/pull-requests/{pr_id}/activities"
+            f"/repos/{repo.slug}/pull-requests/{pr_id}"
         )
         headers = {
             "Authorization": f"Bearer {s.token}",
             "Accept": "application/json",
         }
+
         comments: list[PRComment] = []
+
+        url = f"{base_pr_url}/activities"
         start = 0
         while True:
             try:
@@ -313,6 +317,9 @@ class BitbucketDataCenterHosting(RepoHosting):
                 if activity.get("action") != "COMMENTED":
                     continue
                 comment = activity.get("comment", {})
+                state = comment.get("state", "OPEN")
+                if state == "RESOLVED":
+                    continue
                 author = comment.get("author", {}).get("displayName", "unknown")
                 text = comment.get("text", "")
                 if not text or "yokai" in author.lower():
@@ -329,21 +336,55 @@ class BitbucketDataCenterHosting(RepoHosting):
                     line=line,
                     created_at=str(comment.get("createdDate", "")),
                     severity=severity,
+                    state=state,
                 ))
 
             if body.get("isLastPage", True):
                 break
             start = body.get("nextPageStart", start + 100)
 
+        tasks_url = f"{base_pr_url}/tasks"
+        try:
+            response = requests.get(
+                tasks_url,
+                headers=headers,
+                params={"limit": 100},
+                timeout=s.request_timeout,
+            )
+            response.raise_for_status()
+            for task in response.json().get("values", []):
+                if task.get("state") != "OPEN":
+                    continue
+                text = task.get("text", "")
+                if not text:
+                    continue
+                author = (
+                    task.get("author", {}).get("displayName", "unknown")
+                )
+                anchor = task.get("anchor", {})
+                file_path = anchor.get("path") if anchor else None
+                line = anchor.get("line") if anchor else None
+                comments.append(PRComment(
+                    id=str(task.get("id", "")),
+                    author=author,
+                    text=f"[TASK] {text}",
+                    file_path=file_path,
+                    line=line,
+                    severity="BLOCKER",
+                    state="OPEN",
+                ))
+        except requests.RequestException as e:
+            log.warning(f"Failed to get PR tasks for PR {pr_id}: {e}")
+
         return comments
 
     def checkout_existing_branch(
-        self, repo_path: Path, branch_name: str
+            self, repo_path: Path, branch_name: str
     ) -> None:
         self._run_git(
             self._auth_args() + ["fetch", "origin", branch_name],
             cwd=repo_path,
-        )
+            )
         self._run_git(
             ["checkout", branch_name],
             cwd=repo_path,
@@ -351,7 +392,7 @@ class BitbucketDataCenterHosting(RepoHosting):
         self._run_git(
             self._auth_args() + ["pull", "origin", branch_name],
             cwd=repo_path,
-        )
+            )
 
     def _auth_args(self) -> list[str]:
         return [
@@ -360,10 +401,10 @@ class BitbucketDataCenterHosting(RepoHosting):
         ]
 
     def _run_git(
-        self,
-        args: list[str],
-        cwd: Path | None = None,
-        check: bool = True,
+            self,
+            args: list[str],
+            cwd: Path | None = None,
+            check: bool = True,
     ) -> str:
         cmd = ["git"] + args
         log.info(f"git {' '.join(args)}")
