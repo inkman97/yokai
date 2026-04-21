@@ -20,7 +20,7 @@ from yokai.core.formatters import (
 from yokai.core.hooks import HookRegistry
 from yokai.core.interfaces import IssueTracker, RepoHosting
 from yokai.core.logging_setup import get_logger
-from yokai.core.models import AgentResult, CommitInfo
+from yokai.core.models import AgentResult, CommitInfo, RepoLocation
 from yokai.queue.models import Job, JobResult
 from yokai.queue.postprocessor import PostprocessOutcome, Postprocessor
 from yokai.queue_adapters.agent_runner import job_to_story
@@ -207,16 +207,28 @@ class HostingTrackerPostprocessor(Postprocessor):
         return PostprocessOutcome(success=True, pr_url=pr.url)
 
     def _postprocess_rework(
-        self,
-        job: Job,
-        result: JobResult,
-        story,
+            self,
+            job: Job,
+            result: JobResult,
+            story,
     ) -> PostprocessOutcome:
         """Handle post-processing for rework jobs.
 
         No new PR is opened — the existing PR is already updated by
-        the push. We just comment on Jira and update labels.
+        the push. We resolve the addressed comments/tasks on the PR,
+        comment on Jira, and update labels.
         """
+        # Resolve comments and tasks on the PR
+        pr_id = job.payload.get("pr_id", "")
+        if pr_id:
+            try:
+                repo = self._hosting.resolve_repo(job.repo_slug)
+                self._resolve_pr_feedback(repo, pr_id, job.payload)
+            except Exception:
+                log.exception(
+                    f"Failed to resolve PR feedback for {story.key} (non-fatal)"
+                )
+
         synthetic = AgentResult(
             success=True,
             output=result.agent_output,
@@ -242,3 +254,29 @@ class HostingTrackerPostprocessor(Postprocessor):
 
         pr_url = job.payload.get("pr_url", "")
         return PostprocessOutcome(success=True, pr_url=pr_url)
+
+    def _resolve_pr_feedback(
+            self,
+            repo: RepoLocation,
+            pr_id: str,
+            payload: dict,
+    ) -> None:
+        """Resolve all comments and complete all tasks that were in the rework."""
+        pr_comments = payload.get("pr_comments", [])
+        for comment in pr_comments:
+            comment_id = comment.get("id", "")
+            if not comment_id:
+                continue
+            text = comment.get("text", "")
+            if text.startswith("[TASK]"):
+                try:
+                    self._hosting.complete_pr_task(repo, pr_id, comment_id)
+                    log.info(f"Completed task {comment_id} on PR {pr_id}")
+                except Exception:
+                    log.warning(f"Failed to complete task {comment_id}")
+            else:
+                try:
+                    self._hosting.resolve_pr_comment(repo, pr_id, comment_id)
+                    log.info(f"Resolved comment {comment_id} on PR {pr_id}")
+                except Exception:
+                    log.warning(f"Failed to resolve comment {comment_id}")

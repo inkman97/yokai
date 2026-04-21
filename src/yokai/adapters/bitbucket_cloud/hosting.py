@@ -336,6 +336,25 @@ class BitbucketCloudHosting(RepoHosting):
             ["pull", "origin", branch_name], cwd=repo_path, check=False
         )
 
+    def resolve_pr_comment(
+            self, repo: RepoLocation, pr_id: str, comment_id: str
+    ) -> None:
+        s = self._settings
+        url = (
+            f"{s.base_url}/repositories/{s.workspace}/{repo.slug}"
+            f"/pullrequests/{pr_id}/comments/{comment_id}/resolve"
+        )
+        try:
+            response = requests.post(
+                url,
+                auth=HTTPBasicAuth(s.account, s.token),
+                headers={"Accept": "application/json"},
+                timeout=s.request_timeout,
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            log.warning(f"Failed to resolve comment {comment_id} on PR {pr_id}: {e}")
+
     def _run_git(
             self,
             args: list[str],

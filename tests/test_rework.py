@@ -499,10 +499,96 @@ class TestPostprocessorRework:
 
         assert outcome.success is True
 
+    def test_rework_resolves_comments_on_pr(self, tmp_path):
+        hosting, tracker = self._make(tmp_path)
+        post = HostingTrackerPostprocessor(
+            hosting=hosting, tracker=tracker, workspace_dir=tmp_path
+        )
+        job = Job.new("K-1", "r", {
+            "title": "T",
+            "job_type": "rework",
+            "pr_id": "42",
+            "pr_url": "https://bb.example/pr/42",
+            "pr_comments": [
+                {"id": "100", "text": "Fix this", "author": "Human"},
+                {"id": "101", "text": "And this", "author": "Human"},
+            ],
+        })
+        result = JobResult(
+            job_id=job.job_id,
+            success=True,
+            agent_output="done",
+            duration_seconds=1.0,
+            branch_name="feature/K-1-ai",
+        )
 
-# ----------------------------------------------------------------
-# HostingReworkResolver tests
-# ----------------------------------------------------------------
+        post.run(job, result)
+
+        assert hosting.resolve_pr_comment.call_count == 2
+        resolved_ids = [
+            call.args[2] for call in hosting.resolve_pr_comment.call_args_list
+        ]
+        assert "100" in resolved_ids
+        assert "101" in resolved_ids
+
+    def test_rework_completes_tasks_on_pr(self, tmp_path):
+        hosting, tracker = self._make(tmp_path)
+        post = HostingTrackerPostprocessor(
+            hosting=hosting, tracker=tracker, workspace_dir=tmp_path
+        )
+        job = Job.new("K-1", "r", {
+            "title": "T",
+            "job_type": "rework",
+            "pr_id": "42",
+            "pr_url": "",
+            "pr_comments": [
+                {"id": "100", "text": "Fix this", "author": "Human"},
+                {"id": "500", "text": "[TASK] Add tests", "author": "Reviewer"},
+            ],
+        })
+        result = JobResult(
+            job_id=job.job_id,
+            success=True,
+            agent_output="done",
+            duration_seconds=1.0,
+            branch_name="feature/K-1-ai",
+        )
+
+        post.run(job, result)
+
+        hosting.resolve_pr_comment.assert_called_once_with(
+            hosting.resolve_repo.return_value, "42", "100"
+        )
+        hosting.complete_pr_task.assert_called_once_with(
+            hosting.resolve_repo.return_value, "42", "500"
+        )
+
+    def test_rework_resolution_failure_is_non_fatal(self, tmp_path):
+        hosting, tracker = self._make(tmp_path)
+        hosting.resolve_pr_comment.side_effect = RuntimeError("API error")
+        post = HostingTrackerPostprocessor(
+            hosting=hosting, tracker=tracker, workspace_dir=tmp_path
+        )
+        job = Job.new("K-1", "r", {
+            "title": "T",
+            "job_type": "rework",
+            "pr_id": "42",
+            "pr_url": "",
+            "pr_comments": [
+                {"id": "100", "text": "Fix this", "author": "Human"},
+            ],
+        })
+        result = JobResult(
+            job_id=job.job_id,
+            success=True,
+            agent_output="done",
+            duration_seconds=1.0,
+            branch_name="feature/K-1-ai",
+        )
+
+        outcome = post.run(job, result)
+
+        assert outcome.success is True
 
 class TestHostingReworkResolver:
     def test_finds_pr_by_story_key_in_branch(self):

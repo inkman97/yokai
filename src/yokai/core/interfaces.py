@@ -80,7 +80,7 @@ class RepoHosting(ABC):
 
     @abstractmethod
     def commit_changes(
-        self, repo_path: Path, message: str
+            self, repo_path: Path, message: str
     ) -> CommitInfo | None:
         """Stage all changes and commit them.
 
@@ -93,38 +93,48 @@ class RepoHosting(ABC):
 
     @abstractmethod
     def get_changed_files(
-        self, repo_path: Path, base_branch: str
+            self, repo_path: Path, base_branch: str
     ) -> list[FileChange]:
         """Return the list of files changed in the current branch vs base."""
 
     @abstractmethod
     def open_pull_request(
-        self,
-        repo: RepoLocation,
-        source_branch: str,
-        target_branch: str,
-        title: str,
-        description: str,
+            self,
+            repo: RepoLocation,
+            source_branch: str,
+            target_branch: str,
+            title: str,
+            description: str,
     ) -> PullRequest:
         """Open a pull request and return its identifiers."""
 
     def find_pull_requests(
-        self, repo: RepoLocation, branch_name: str
+            self, repo: RepoLocation, branch_name: str
     ) -> list[PullRequest]:
         """Find open pull requests for a given source branch."""
         return []
 
     def get_pr_comments(
-        self, repo: RepoLocation, pr_id: str
+            self, repo: RepoLocation, pr_id: str
     ) -> list[PRComment]:
         """Get review comments on a pull request."""
         return []
 
     def checkout_existing_branch(
-        self, repo_path: Path, branch_name: str
+            self, repo_path: Path, branch_name: str
     ) -> None:
         """Checkout an existing remote branch."""
         raise NotImplementedError
+
+    def resolve_pr_comment(
+            self, repo: RepoLocation, pr_id: str, comment_id: str
+    ) -> None:
+        """Mark a PR comment as resolved."""
+
+    def complete_pr_task(
+            self, repo: RepoLocation, pr_id: str, task_id: str
+    ) -> None:
+        """Mark a PR task as completed/resolved."""
 
 
 class CodingAgent(ABC):

@@ -381,18 +381,63 @@ class BitbucketDataCenterHosting(RepoHosting):
     def checkout_existing_branch(
             self, repo_path: Path, branch_name: str
     ) -> None:
+        self._run_git(["fetch", "origin"], cwd=repo_path)
         self._run_git(
-            self._auth_args() + ["fetch", "origin", branch_name],
-            cwd=repo_path,
-            )
-        self._run_git(
-            ["checkout", branch_name],
-            cwd=repo_path,
+            ["checkout", branch_name], cwd=repo_path, check=False
         )
         self._run_git(
-            self._auth_args() + ["pull", "origin", branch_name],
-            cwd=repo_path,
+            ["pull", "origin", branch_name], cwd=repo_path, check=False
+        )
+
+    def resolve_pr_comment(
+            self, repo: RepoLocation, pr_id: str, comment_id: str
+    ) -> None:
+        s = self._settings
+        project_upper = s.namespace.upper()
+        url = (
+            f"{s.base_url}/rest/api/1.0/projects/{project_upper}"
+            f"/repos/{repo.slug}/pull-requests/{pr_id}"
+            f"/comments/{comment_id}"
+        )
+        headers = {
+            "Authorization": f"Bearer {s.token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        try:
+            get_resp = requests.get(url, headers=headers, timeout=s.request_timeout)
+            get_resp.raise_for_status()
+            version = get_resp.json().get("version", 0)
+            response = requests.put(
+                url,
+                headers=headers,
+                json={"version": version, "threadResolved": True},
+                timeout=s.request_timeout,
             )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            log.warning(f"Failed to resolve comment {comment_id} on PR {pr_id}: {e}")
+
+    def complete_pr_task(
+            self, repo: RepoLocation, pr_id: str, task_id: str
+    ) -> None:
+        s = self._settings
+        url = f"{s.base_url}/rest/api/1.0/tasks/{task_id}"
+        headers = {
+            "Authorization": f"Bearer {s.token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        try:
+            response = requests.put(
+                url,
+                headers=headers,
+                json={"state": "RESOLVED"},
+                timeout=s.request_timeout,
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            log.warning(f"Failed to complete task {task_id}: {e}")
 
     def _auth_args(self) -> list[str]:
         return [
