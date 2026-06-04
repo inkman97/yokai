@@ -16,7 +16,7 @@ def make_dc_tracker():
     return JiraDataCenterTracker(
         JiraDataCenterSettings(
             base_url="https://jira.example.com",
-            project="NOVA",
+            project="TEST",
             account="testuser",
             token="test-token",
         )
@@ -27,7 +27,7 @@ def make_cloud_tracker():
     return JiraCloudTracker(
         JiraCloudSettings(
             base_url="https://acme.atlassian.net",
-            project="NOVA",
+            project="TEST",
             account="alice@example.com",
             token="cloud-token",
         )
@@ -37,7 +37,7 @@ def make_cloud_tracker():
 REWORK_SEARCH_RESPONSE = {
     "issues": [
         {
-            "key": "NOVA-200",
+            "key": "TEST-200",
             "fields": {
                 "summary": "Fix review comments",
                 "description": "Reviewer asked for changes",
@@ -62,7 +62,7 @@ class TestJiraDcSearchRework:
         stories = tracker.search_rework_stories()
 
         assert len(stories) == 1
-        assert stories[0].key == "NOVA-200"
+        assert stories[0].key == "TEST-200"
         assert "ai-rework" in stories[0].labels
 
     @responses.activate
@@ -96,11 +96,11 @@ class TestJiraDcMarkRework:
     def test_mark_rework_in_progress_adds_processing_label(self):
         responses.add(
             responses.PUT,
-            "https://jira.example.com/rest/api/2/issue/NOVA-200",
+            "https://jira.example.com/rest/api/2/issue/TEST-200",
             status=204,
         )
         tracker = make_dc_tracker()
-        tracker.mark_rework_in_progress("NOVA-200")
+        tracker.mark_rework_in_progress("TEST-200")
         body = responses.calls[0].request.body
         assert b"ai-processing" in body
 
@@ -108,21 +108,21 @@ class TestJiraDcMarkRework:
     def test_mark_rework_done_removes_rework_and_processing_adds_done(self):
         responses.add(
             responses.PUT,
-            "https://jira.example.com/rest/api/2/issue/NOVA-200",
+            "https://jira.example.com/rest/api/2/issue/TEST-200",
             status=204,
         )
         responses.add(
             responses.PUT,
-            "https://jira.example.com/rest/api/2/issue/NOVA-200",
+            "https://jira.example.com/rest/api/2/issue/TEST-200",
             status=204,
         )
         responses.add(
             responses.PUT,
-            "https://jira.example.com/rest/api/2/issue/NOVA-200",
+            "https://jira.example.com/rest/api/2/issue/TEST-200",
             status=204,
         )
         tracker = make_dc_tracker()
-        tracker.mark_rework_done("NOVA-200")
+        tracker.mark_rework_done("TEST-200")
 
         assert len(responses.calls) == 3
         bodies = [c.request.body for c in responses.calls]
@@ -144,7 +144,7 @@ class TestJiraCloudSearchRework:
         stories = tracker.search_rework_stories()
 
         assert len(stories) == 1
-        assert stories[0].key == "NOVA-200"
+        assert stories[0].key == "TEST-200"
 
     @responses.activate
     def test_jql_filters_by_rework_label(self):
@@ -165,20 +165,20 @@ class TestJiraCloudMarkRework:
     def test_mark_rework_done_removes_rework_and_processing_adds_done(self):
         responses.add(
             responses.PUT,
-            "https://acme.atlassian.net/rest/api/3/issue/NOVA-200",
+            "https://acme.atlassian.net/rest/api/3/issue/TEST-200",
             status=204,
         )
         responses.add(
             responses.PUT,
-            "https://acme.atlassian.net/rest/api/3/issue/NOVA-200",
+            "https://acme.atlassian.net/rest/api/3/issue/TEST-200",
             status=204,
         )
         responses.add(
             responses.PUT,
-            "https://acme.atlassian.net/rest/api/3/issue/NOVA-200",
+            "https://acme.atlassian.net/rest/api/3/issue/TEST-200",
             status=204,
         )
         tracker = make_cloud_tracker()
-        tracker.mark_rework_done("NOVA-200")
+        tracker.mark_rework_done("TEST-200")
 
         assert len(responses.calls) == 3

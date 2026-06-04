@@ -24,15 +24,15 @@ def make_story(
 
 class TestComponentMapRouter:
     def test_returns_repo_when_component_matches(self):
-        router = ComponentMapRouter({"EMU-BE": "nova-be", "EMU-FE": "nova-fe"})
-        assert router.resolve_repo(make_story(components=["EMU-BE"])) == "nova-be"
+        router = ComponentMapRouter({"EMU-BE": "TEST-be", "EMU-FE": "TEST-fe"})
+        assert router.resolve_repo(make_story(components=["EMU-BE"])) == "TEST-be"
 
     def test_returns_none_when_no_component_matches(self):
-        router = ComponentMapRouter({"EMU-BE": "nova-be"})
+        router = ComponentMapRouter({"EMU-BE": "TEST-be"})
         assert router.resolve_repo(make_story(components=["OTHER"])) is None
 
     def test_returns_none_when_no_components(self):
-        router = ComponentMapRouter({"EMU-BE": "nova-be"})
+        router = ComponentMapRouter({"EMU-BE": "TEST-be"})
         assert router.resolve_repo(make_story()) is None
 
     def test_first_matching_component_wins(self):

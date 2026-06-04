@@ -18,7 +18,7 @@ def make_tracker():
     return JiraCloudTracker(
         JiraCloudSettings(
             base_url="https://acme.atlassian.net",
-            project="NOVA",
+            project="TEST",
             account="alice@example.com",
             token="cloud-token",
         )
@@ -41,7 +41,7 @@ def adf_paragraph(text: str) -> dict:
 JIRA_CLOUD_SEARCH_RESPONSE = {
     "issues": [
         {
-            "key": "NOVA-201",
+            "key": "TEST-201",
             "fields": {
                 "summary": "Improve cloud error handling",
                 "description": adf_paragraph("Return 404 instead of 500"),
@@ -50,7 +50,7 @@ JIRA_CLOUD_SEARCH_RESPONSE = {
             },
         },
         {
-            "key": "NOVA-202",
+            "key": "TEST-202",
             "fields": {
                 "summary": "Add filter",
                 "description": None,
@@ -75,13 +75,13 @@ class TestSearchPendingStories:
         stories = tracker.search_pending_stories()
 
         assert len(stories) == 2
-        assert stories[0].key == "NOVA-201"
+        assert stories[0].key == "TEST-201"
         assert stories[0].title == "Improve cloud error handling"
         assert stories[0].components == ["EMU-BE"]
         assert "ai-pipeline" in stories[0].labels
         assert (
             stories[0].url
-            == "https://acme.atlassian.net/browse/NOVA-201"
+            == "https://acme.atlassian.net/browse/TEST-201"
         )
 
     @responses.activate
@@ -154,12 +154,12 @@ class TestAddComment:
     def test_posts_comment_as_adf(self):
         responses.add(
             responses.POST,
-            "https://acme.atlassian.net/rest/api/3/issue/NOVA-201/comment",
+            "https://acme.atlassian.net/rest/api/3/issue/TEST-201/comment",
             json={"id": "1"},
             status=201,
         )
         tracker = make_tracker()
-        tracker.add_comment("NOVA-201", "test comment")
+        tracker.add_comment("TEST-201", "test comment")
         assert len(responses.calls) == 1
         body = responses.calls[0].request.body
         assert b'"type": "doc"' in body
@@ -169,13 +169,13 @@ class TestAddComment:
     def test_raises_on_failure(self):
         responses.add(
             responses.POST,
-            "https://acme.atlassian.net/rest/api/3/issue/NOVA-201/comment",
+            "https://acme.atlassian.net/rest/api/3/issue/TEST-201/comment",
             status=403,
             json={"error": "forbidden"},
         )
         tracker = make_tracker()
         with pytest.raises(IssueTrackerError, match="Failed to add comment"):
-            tracker.add_comment("NOVA-201", "test")
+            tracker.add_comment("TEST-201", "test")
 
 
 class TestMarkInProgress:
@@ -183,11 +183,11 @@ class TestMarkInProgress:
     def test_adds_processing_label(self):
         responses.add(
             responses.PUT,
-            "https://acme.atlassian.net/rest/api/3/issue/NOVA-201",
+            "https://acme.atlassian.net/rest/api/3/issue/TEST-201",
             status=204,
         )
         tracker = make_tracker()
-        tracker.mark_in_progress("NOVA-201")
+        tracker.mark_in_progress("TEST-201")
         body = responses.calls[0].request.body
         assert b"ai-processing" in body
 
@@ -195,8 +195,8 @@ class TestMarkInProgress:
 class TestGetStoryUrl:
     def test_builds_browse_url(self):
         tracker = make_tracker()
-        url = tracker.get_story_url("NOVA-42")
-        assert url == "https://acme.atlassian.net/browse/NOVA-42"
+        url = tracker.get_story_url("TEST-42")
+        assert url == "https://acme.atlassian.net/browse/TEST-42"
 
 
 class TestAdfPlainTextHelpers:

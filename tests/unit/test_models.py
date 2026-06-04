@@ -10,7 +10,7 @@ from yokai.core.models import (
 class TestStory:
     def test_has_label_returns_true_when_label_present(self):
         story = Story(
-            key="NOVA-1",
+            key="TEST-1",
             title="Test",
             description="",
             labels=["ai-pipeline", "backend"],
@@ -18,12 +18,12 @@ class TestStory:
         assert story.has_label("ai-pipeline") is True
 
     def test_has_label_returns_false_when_label_absent(self):
-        story = Story(key="NOVA-1", title="Test", description="")
+        story = Story(key="TEST-1", title="Test", description="")
         assert story.has_label("ai-pipeline") is False
 
     def test_has_component_returns_true_when_present(self):
         story = Story(
-            key="NOVA-1",
+            key="TEST-1",
             title="Test",
             description="",
             components=["EMU-BE"],
@@ -31,7 +31,7 @@ class TestStory:
         assert story.has_component("EMU-BE") is True
 
     def test_has_component_returns_false_when_absent(self):
-        story = Story(key="NOVA-1", title="Test", description="")
+        story = Story(key="TEST-1", title="Test", description="")
         assert story.has_component("EMU-BE") is False
 
     def test_default_collections_are_independent_per_instance(self):

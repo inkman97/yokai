@@ -62,8 +62,8 @@ class TestResolveRepo:
 
     def test_slug_preserved(self):
         hosting = make_hosting()
-        loc = hosting.resolve_repo("nova-cloud-svc")
-        assert loc.slug == "nova-cloud-svc"
+        loc = hosting.resolve_repo("TEST-cloud-svc")
+        assert loc.slug == "TEST-cloud-svc"
 
 
 class TestOpenPullRequest:
@@ -184,7 +184,7 @@ class TestFindPullRequests:
                         "id": 10,
                         "title": "AI PR",
                         "description": "auto",
-                        "source": {"branch": {"name": "feature/NOVA-1-ai"}},
+                        "source": {"branch": {"name": "feature/TEST-1-ai"}},
                         "destination": {"branch": {"name": "main"}},
                         "links": {"html": {"href": "https://bb.example/pr/10"}},
                     },
@@ -202,11 +202,11 @@ class TestFindPullRequests:
         )
         hosting = make_hosting()
         loc = hosting.resolve_repo("my-repo")
-        prs = hosting.find_pull_requests(loc, "feature/NOVA-1-ai")
+        prs = hosting.find_pull_requests(loc, "feature/TEST-1-ai")
 
         assert len(prs) == 1
         assert prs[0].id == "10"
-        assert prs[0].source_branch == "feature/NOVA-1-ai"
+        assert prs[0].source_branch == "feature/TEST-1-ai"
         assert prs[0].target_branch == "main"
 
     @responses.activate

@@ -24,7 +24,7 @@
 issue_tracker:
   type: jira_cloud
   base_url: https://acme.atlassian.net
-  project: NOVA
+  project: TEST
   account: ${JIRA_CLOUD_EMAIL}
   token: ${JIRA_CLOUD_API_TOKEN}
 

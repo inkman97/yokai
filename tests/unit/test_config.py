@@ -13,7 +13,7 @@ VALID_YAML = """
 issue_tracker:
   type: jira_dc
   base_url: https://flow.example.com
-  project: NOVA
+  project: TEST
   trigger_label: ai-pipeline
   processing_label: ai-processing
   status: Backlog
@@ -40,8 +40,8 @@ agent:
 routing:
   type: component_map
   components:
-    EMU-BE: nova-masterdata-editor-commons
-    EMU-FE: nova-masterdata-editor-ui-commons
+    EMU-BE: TEST-masterdata-editor-commons
+    EMU-FE: TEST-masterdata-editor-ui-commons
 
 orchestrator:
   poll_interval_seconds: 30
@@ -100,7 +100,7 @@ class TestLoadConfig:
         config = load_config(valid_config_file)
         assert config.issue_tracker.type == "jira_dc"
         assert config.issue_tracker.base_url == "https://flow.example.com"
-        assert config.issue_tracker.project == "NOVA"
+        assert config.issue_tracker.project == "TEST"
         assert config.issue_tracker.token == "jira-token-value"
 
     def test_loads_repo_hosting_section(self, valid_config_file):
@@ -121,8 +121,8 @@ class TestLoadConfig:
     def test_loads_routing_components(self, valid_config_file):
         config = load_config(valid_config_file)
         assert config.routing.type == "component_map"
-        assert config.routing.components["EMU-BE"] == "nova-masterdata-editor-commons"
-        assert config.routing.components["EMU-FE"] == "nova-masterdata-editor-ui-commons"
+        assert config.routing.components["EMU-BE"] == "TEST-masterdata-editor-commons"
+        assert config.routing.components["EMU-FE"] == "TEST-masterdata-editor-ui-commons"
 
     def test_loads_orchestrator_section(self, valid_config_file):
         config = load_config(valid_config_file)
@@ -172,7 +172,7 @@ class TestLoadConfig:
             "issue_tracker:\n"
             "  type: jira_dc\n"
             "  base_url: https://flow.example.com\n"
-            "  project: NOVA\n"
+            "  project: TEST\n"
             "  account: u\n"
             "  token: ${TEST_JIRA_TOKEN}\n"
             "repo_hosting:\n"
@@ -201,7 +201,7 @@ class TestLoadConfig:
             "issue_tracker:\n"
             "  type: jira_dc\n"
             "  base_url: https://flow.example.com\n"
-            "  project: NOVA\n"
+            "  project: TEST\n"
             "  username: u\n"
             "  token: ${TEST_JIRA_TOKEN}\n"
             "repo_hosting:\n"
@@ -228,7 +228,7 @@ class TestLoadConfig:
             "issue_tracker:\n"
             "  type: jira_dc\n"
             "  base_url: https://flow.example.com\n"
-            "  project: NOVA\n"
+            "  project: TEST\n"
             "  account: u\n"
             "  token: ${TEST_JIRA_TOKEN}\n"
             "repo_hosting:\n"

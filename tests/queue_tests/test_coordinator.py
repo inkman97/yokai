@@ -85,7 +85,7 @@ def source():
 
 @pytest.fixture
 def router():
-    return ComponentMapRouter({"EMU-BE": "nova-be", "EMU-FE": "nova-fe"})
+    return ComponentMapRouter({"EMU-BE": "TEST-be", "EMU-FE": "TEST-fe"})
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ class TestRunOnceHappyPath:
         queued = backend.list_by_status(JobStatus.QUEUED)
         assert len(queued) == 1
         assert queued[0].story_key == "S-1"
-        assert queued[0].repo_slug == "nova-be"
+        assert queued[0].repo_slug == "TEST-be"
 
     def test_marks_story_accepted_after_enqueue(self, coordinator, source):
         source.add_story(make_story("S-1", components=["EMU-BE"]))

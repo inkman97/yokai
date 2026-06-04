@@ -28,27 +28,27 @@ class TestRenderBranchName:
     def test_default_pattern(self):
         result = render_branch_name(
             "feature/{issue_key}-ai-{timestamp}",
-            issue_key="NOVA-101",
+            issue_key="TEST-101",
             timestamp=1234567890,
         )
-        assert result == "feature/NOVA-101-ai-1234567890"
+        assert result == "feature/TEST-101-ai-1234567890"
 
     def test_lowercase_placeholder(self):
         result = render_branch_name(
             "ai/{issue_key_lc}-{timestamp}",
-            issue_key="NOVA-101",
+            issue_key="TEST-101",
             timestamp=42,
         )
-        assert result == "ai/nova-101-42"
+        assert result == "ai/TEST-101-42"
 
     def test_slug_placeholder(self):
         result = render_branch_name(
             "feature/{issue_key}-{slug}",
-            issue_key="NOVA-1",
+            issue_key="TEST-1",
             title="Improve Error Handling",
             timestamp=0,
         )
-        assert result == "feature/NOVA-1-improve-error-handling"
+        assert result == "feature/TEST-1-improve-error-handling"
 
     def test_timestamp_defaults_to_now_when_none(self):
         result = render_branch_name(
@@ -61,8 +61,8 @@ class TestRenderBranchName:
     def test_mixed_placeholders(self):
         result = render_branch_name(
             "{issue_key}/{slug}-{timestamp}",
-            issue_key="NOVA-42",
+            issue_key="TEST-42",
             title="Do stuff",
             timestamp=1000,
         )
-        assert result == "NOVA-42/do-stuff-1000"
+        assert result == "TEST-42/do-stuff-1000"

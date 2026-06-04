@@ -1,7 +1,7 @@
 """Branch name generation from a configurable template.
 
 The template supports these placeholders:
-- {issue_key}    the story key as-is (e.g. NOVA-101)
+- {issue_key}    the story key as-is (e.g. TEST-101)
 - {issue_key_lc} the story key lowercased
 - {timestamp}    unix timestamp at generation time
 - {slug}         a slugified version of the story title (lowercase, hyphens)

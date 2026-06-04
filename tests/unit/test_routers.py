@@ -12,17 +12,17 @@ from yokai.core.routers import (
 
 class TestComponentMapRouter:
     def test_returns_repo_when_component_matches(self):
-        router = ComponentMapRouter({"EMU-BE": "nova-be", "EMU-FE": "nova-fe"})
+        router = ComponentMapRouter({"EMU-BE": "TEST-be", "EMU-FE": "TEST-fe"})
         story = Story(key="N-1", title="", description="", components=["EMU-BE"])
-        assert router.resolve_repo(story) == "nova-be"
+        assert router.resolve_repo(story) == "TEST-be"
 
     def test_returns_none_when_no_component_matches(self):
-        router = ComponentMapRouter({"EMU-BE": "nova-be"})
+        router = ComponentMapRouter({"EMU-BE": "TEST-be"})
         story = Story(key="N-1", title="", description="", components=["OTHER"])
         assert router.resolve_repo(story) is None
 
     def test_returns_none_when_no_components(self):
-        router = ComponentMapRouter({"EMU-BE": "nova-be"})
+        router = ComponentMapRouter({"EMU-BE": "TEST-be"})
         story = Story(key="N-1", title="", description="")
         assert router.resolve_repo(story) is None
 

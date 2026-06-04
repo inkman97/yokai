@@ -17,7 +17,7 @@ from yokai.core.models import (
 
 def make_story():
     return Story(
-        key="NOVA-101",
+        key="TEST-101",
         title="Improve error handling",
         description="...",
         components=["EMU-BE"],
@@ -28,7 +28,7 @@ def make_commit():
     return CommitInfo(
         sha="abcdef0123456789",
         short_sha="abcdef0",
-        message="feat(NOVA-101): improve error handling",
+        message="feat(TEST-101): improve error handling",
         files_changed=4,
         insertions=80,
         deletions=10,
@@ -48,26 +48,26 @@ class TestBuildPrDescription:
     def test_includes_story_key_and_title(self):
         result = build_pr_description(
             story=make_story(),
-            story_url="https://jira.example.com/browse/NOVA-101",
-            branch_name="feature/NOVA-101-ai",
+            story_url="https://jira.example.com/browse/TEST-101",
+            branch_name="feature/TEST-101-ai",
             target_branch="master",
             commit=make_commit(),
             changed_files=make_files(),
             timestamp=datetime(2026, 4, 10, 14, 30),
         )
-        assert "NOVA-101" in result
+        assert "TEST-101" in result
         assert "Improve error handling" in result
 
     def test_includes_branch_info(self):
         result = build_pr_description(
             story=make_story(),
             story_url="x",
-            branch_name="feature/NOVA-101-ai",
+            branch_name="feature/TEST-101-ai",
             target_branch="master",
             commit=make_commit(),
             changed_files=make_files(),
         )
-        assert "feature/NOVA-101-ai" in result
+        assert "feature/TEST-101-ai" in result
         assert "master" in result
 
     def test_includes_commit_short_sha(self):

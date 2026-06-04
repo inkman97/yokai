@@ -48,9 +48,9 @@ class TestFindPullRequests:
                 "values": [
                     {
                         "id": 10,
-                        "title": "[AI] NOVA-101",
+                        "title": "[AI] TEST-101",
                         "description": "auto",
-                        "fromRef": {"displayId": "feature/NOVA-101-ai"},
+                        "fromRef": {"displayId": "feature/TEST-101-ai"},
                         "toRef": {"displayId": "master"},
                         "links": {"self": [{"href": "https://code.example.com/pr/10"}]},
                     },
@@ -67,11 +67,11 @@ class TestFindPullRequests:
             status=200,
         )
         hosting = make_hosting()
-        prs = hosting.find_pull_requests(REPO, "feature/NOVA-101-ai")
+        prs = hosting.find_pull_requests(REPO, "feature/TEST-101-ai")
 
         assert len(prs) == 1
         assert prs[0].id == "10"
-        assert prs[0].source_branch == "feature/NOVA-101-ai"
+        assert prs[0].source_branch == "feature/TEST-101-ai"
 
     @responses.activate
     def test_returns_all_when_branch_is_empty(self):

@@ -14,7 +14,7 @@ def make_tracker():
     return JiraDataCenterTracker(
         JiraDataCenterSettings(
             base_url="https://jira.example.com",
-            project="NOVA",
+            project="TEST",
             account="testuser",
             token="test-token",
         )
@@ -24,7 +24,7 @@ def make_tracker():
 JIRA_SEARCH_RESPONSE = {
     "issues": [
         {
-            "key": "NOVA-101",
+            "key": "TEST-101",
             "fields": {
                 "summary": "Improve error handling",
                 "description": "Return 404 instead of 500",
@@ -33,7 +33,7 @@ JIRA_SEARCH_RESPONSE = {
             },
         },
         {
-            "key": "NOVA-102",
+            "key": "TEST-102",
             "fields": {
                 "summary": "Add date filter",
                 "description": None,
@@ -58,11 +58,11 @@ class TestSearchPendingStories:
         stories = tracker.search_pending_stories()
 
         assert len(stories) == 2
-        assert stories[0].key == "NOVA-101"
+        assert stories[0].key == "TEST-101"
         assert stories[0].title == "Improve error handling"
         assert stories[0].components == ["EMU-BE"]
         assert "ai-pipeline" in stories[0].labels
-        assert stories[0].url == "https://jira.example.com/browse/NOVA-101"
+        assert stories[0].url == "https://jira.example.com/browse/TEST-101"
 
     @responses.activate
     def test_handles_null_description(self):
@@ -125,7 +125,7 @@ class TestSearchPendingStories:
         tracker = make_tracker()
         tracker.search_pending_stories()
         url = responses.calls[0].request.url
-        assert "project+%3D+NOVA" in url or "project%20%3D%20NOVA" in url
+        assert "project+%3D+TEST" in url or "project%20%3D%20TEST" in url
         assert "ai-pipeline" in url
         assert "ai-processing" in url
 
@@ -135,25 +135,25 @@ class TestAddComment:
     def test_posts_comment_body(self):
         responses.add(
             responses.POST,
-            "https://jira.example.com/rest/api/2/issue/NOVA-101/comment",
+            "https://jira.example.com/rest/api/2/issue/TEST-101/comment",
             json={"id": "1"},
             status=201,
         )
         tracker = make_tracker()
-        tracker.add_comment("NOVA-101", "test comment")
+        tracker.add_comment("TEST-101", "test comment")
         assert len(responses.calls) == 1
 
     @responses.activate
     def test_raises_on_failure(self):
         responses.add(
             responses.POST,
-            "https://jira.example.com/rest/api/2/issue/NOVA-101/comment",
+            "https://jira.example.com/rest/api/2/issue/TEST-101/comment",
             status=403,
             json={"error": "forbidden"},
         )
         tracker = make_tracker()
         with pytest.raises(IssueTrackerError, match="Failed to add comment"):
-            tracker.add_comment("NOVA-101", "test")
+            tracker.add_comment("TEST-101", "test")
 
 
 class TestMarkInProgress:
@@ -161,11 +161,11 @@ class TestMarkInProgress:
     def test_adds_processing_label(self):
         responses.add(
             responses.PUT,
-            "https://jira.example.com/rest/api/2/issue/NOVA-101",
+            "https://jira.example.com/rest/api/2/issue/TEST-101",
             status=204,
         )
         tracker = make_tracker()
-        tracker.mark_in_progress("NOVA-101")
+        tracker.mark_in_progress("TEST-101")
         body = responses.calls[0].request.body
         assert b"ai-processing" in body
 
@@ -173,5 +173,5 @@ class TestMarkInProgress:
 class TestGetStoryUrl:
     def test_builds_browse_url(self):
         tracker = make_tracker()
-        url = tracker.get_story_url("NOVA-42")
-        assert url == "https://jira.example.com/browse/NOVA-42"
+        url = tracker.get_story_url("TEST-42")
+        assert url == "https://jira.example.com/browse/TEST-42"

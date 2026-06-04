@@ -132,7 +132,7 @@ class TestCoordinatorRework:
 
     @pytest.fixture
     def router(self):
-        return ComponentMapRouter({"EMU-BE": "nova-be"})
+        return ComponentMapRouter({"EMU-BE": "TEST-be"})
 
     def test_enqueues_rework_story_with_pr_info(self, backend, source, router):
         resolver = FakeReworkResolver(SAMPLE_PR_INFO)
@@ -702,14 +702,14 @@ class TestHostingReworkResolver:
                 id="10",
                 url="",
                 title="AI",
-                source_branch="feature/NOVA-101-ai",
+                source_branch="feature/TEST-101-ai",
                 target_branch="master",
             ),
         ]
         hosting.get_pr_comments.return_value = []
 
         resolver = HostingReworkResolver(hosting)
-        result = resolver.resolve("nova-101", "r")
+        result = resolver.resolve("TEST-101", "r")
 
         assert result is not None
-        assert result["branch_name"] == "feature/NOVA-101-ai"
+        assert result["branch_name"] == "feature/TEST-101-ai"

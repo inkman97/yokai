@@ -32,7 +32,7 @@ def make_config(tmp_path: Path, **overrides) -> FrameworkConfig:
         issue_tracker=IssueTrackerConfig(
             type="jira_dc",
             base_url="https://jira.example.com",
-            project="NOVA",
+            project="TEST",
             trigger_label="ai-pipeline",
             processing_label="ai-processing",
             status="Backlog",

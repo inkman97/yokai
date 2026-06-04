@@ -47,8 +47,8 @@ class TestResolveRepo:
 
     def test_slug_preserved(self):
         hosting = make_hosting()
-        loc = hosting.resolve_repo("nova-masterdata-editor-commons")
-        assert loc.slug == "nova-masterdata-editor-commons"
+        loc = hosting.resolve_repo("TEST-masterdata-editor-commons")
+        assert loc.slug == "TEST-masterdata-editor-commons"
 
 
 class TestOpenPullRequest:

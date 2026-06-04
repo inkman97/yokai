@@ -14,7 +14,7 @@
 issue_tracker:
   type: jira_dc
   base_url: https://flow.example-corp.ch
-  project: NOVA
+  project: TEST
   trigger_label: ai-pipeline
   processing_label: ai-processing
   status: Backlog
@@ -43,8 +43,8 @@ agent:
 routing:
   type: component_map
   components:
-    EMU-BE: nova-masterdata-editor-commons
-    EMU-FE: nova-masterdata-editor-ui-commons
+    EMU-BE: TEST-masterdata-editor-commons
+    EMU-FE: TEST-masterdata-editor-ui-commons
   # Stories without a matching component fall back to a label like
   # "repo:my-repo-name", which is handled by the chained label router.
   label_prefix: "repo:"

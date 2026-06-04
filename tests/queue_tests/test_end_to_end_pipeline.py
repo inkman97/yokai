@@ -101,7 +101,7 @@ def source():
 
 @pytest.fixture
 def router():
-    return ComponentMapRouter({"EMU-BE": "nova-be", "EMU-FE": "nova-fe"})
+    return ComponentMapRouter({"EMU-BE": "TEST-be", "EMU-FE": "TEST-fe"})
 
 
 @pytest.fixture
